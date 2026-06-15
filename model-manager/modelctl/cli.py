@@ -267,7 +267,7 @@ def cmd_activate(model_id: str):
     storage_dir = HERE / "storage"
     storage_dir.mkdir(exist_ok=True)
     symlink = storage_dir / "active.gguf"
-    target = Path(m.storage_path) / primary.path  # relative to project root
+    target = HERE / m.storage_path / primary.path
     relative_target = os.path.relpath(target, storage_dir)
 
     if symlink.is_symlink() or symlink.exists():
