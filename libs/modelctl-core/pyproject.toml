@@ -1,0 +1,16 @@
+[project]
+name = "modelctl-core"
+version = "0.2.0"
+description = "Core library for model management — registry, HuggingFace client, validation"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

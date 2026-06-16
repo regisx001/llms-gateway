@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
 from typing import Generator
@@ -21,7 +20,7 @@ def tmp_registry(monkeypatch) -> Generator[Path, None, None]:
     sto_dir.mkdir(parents=True)
 
     # Point registry module at temp paths
-    import modelctl.registry as reg
+    import modelctl_core.registry as reg
     monkeypatch.setattr(reg, "REGISTRY_DIR", reg_dir)
     monkeypatch.setattr(reg, "STORAGE_DIR", sto_dir)
     monkeypatch.setattr(reg, "MODELS_PATH", reg_dir / "models.json")

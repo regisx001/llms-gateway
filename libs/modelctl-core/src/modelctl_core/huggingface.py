@@ -11,7 +11,6 @@ from urllib.parse import quote
 import requests
 
 from .models import Model, Artifact
-from . import registry
 
 HF_API = "https://huggingface.co/api/models"
 HF_RESOLVE = "https://huggingface.co/{repo_id}/resolve/main/{filename}"
@@ -44,7 +43,7 @@ def _filter_gguf_files(siblings: list[dict]) -> list[str]:
              for s in siblings if s["rfilename"].endswith(".gguf")]
 
     def sort_key(f):
-        m = re.search(r"Q(\d+)", f)
+        m = re.search(r"Q(\d+)", f, re.IGNORECASE)
         return int(m.group(1)) if m else 99
     files.sort(key=sort_key)
     return files
@@ -99,6 +98,8 @@ def download_file(repo_id: str, filename: str, dest_dir: Path, on_progress=None)
     """Download a single file from a HuggingFace repo to dest_dir."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / filename
+    # Ensure parent dirs exist for nested paths (e.g., MTP/model.gguf)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     url = HF_RESOLVE.format(repo_id=repo_id, filename=filename)
 
     resp = requests.get(url, headers=_headers(), stream=True, timeout=30)

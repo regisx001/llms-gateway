@@ -9,17 +9,61 @@ from typing import Optional
 
 from .models import Model, Download
 
-# Detect environment: container vs host
-# Container: registry mounted at /opt/model-manager/registry
-# Host:      registry is next to the modelctl package
-_CONTAINER_REGISTRY = Path("/opt/model-manager/registry")
-if _CONTAINER_REGISTRY.exists():
-    REGISTRY_DIR = _CONTAINER_REGISTRY
-    STORAGE_DIR = Path("/models")
-else:
-    ROOT = Path(__file__).resolve().parent.parent
-    REGISTRY_DIR = ROOT / "registry"
-    STORAGE_DIR = ROOT / "storage"
+
+def _find_registry_root() -> Path:
+    """Find registry/ directory by walking up from this file or using env."""
+    env_root = os.environ.get("MODELCTL_REGISTRY_DIR")
+    if env_root:
+        return Path(env_root)
+
+    # Container path (mounted volume)
+    container_path = Path("/opt/model-manager/registry")
+    if container_path.exists():
+        return container_path
+
+    # Walk up from this source file to find workspace root with registry/
+    current = Path(__file__).resolve().parent
+    for _ in range(8):
+        candidate = current / "registry"
+        if candidate.is_dir():
+            return candidate
+        if current.parent == current:
+            break
+        current = current.parent
+
+    # Fallback: assume we're in a standard monorepo layout
+    # libs/modelctl-core/src/modelctl_core/registry.py → root is 4 levels up
+    fallback = Path(__file__).resolve().parent.parent.parent.parent.parent / "registry"
+    return fallback
+
+
+def _find_storage_root() -> Path:
+    """Find storage/ directory."""
+    env_root = os.environ.get("MODELCTL_STORAGE_DIR")
+    if env_root:
+        return Path(env_root)
+
+    # Container path
+    container_path = Path("/models")
+    if container_path.exists():
+        return container_path
+
+    # Walk up from source to find workspace root with storage/
+    current = Path(__file__).resolve().parent
+    for _ in range(8):
+        candidate = current / "storage"
+        if candidate.is_dir():
+            return candidate
+        if current.parent == current:
+            break
+        current = current.parent
+
+    fallback = Path(__file__).resolve().parent.parent.parent.parent.parent / "storage"
+    return fallback
+
+
+REGISTRY_DIR = _find_registry_root()
+STORAGE_DIR = _find_storage_root()
 
 MODELS_PATH = REGISTRY_DIR / "models.json"
 DOWNLOADS_PATH = REGISTRY_DIR / "downloads.json"

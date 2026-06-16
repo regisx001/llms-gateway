@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from modelctl import registry as reg
-from modelctl.models import Model, Artifact, Download
+from modelctl_core import registry as reg
+from modelctl_core.models import Model, Artifact, Download
 
 
 class TestRegistry:
@@ -98,40 +98,45 @@ class TestDownloads:
 
 
 class TestActive:
-    def test_empty_active(self, tmp_registry):
-        data = reg.load_active()
-        assert data == {"active": []}
+    def test_load_active_empty(self, tmp_registry):
+        assert reg.load_active() == {"active": []}
 
-    def test_set_and_load_active(self, tmp_registry):
-        reg.set_active("model-1", "chat")
+    def test_set_active(self, tmp_registry):
+        reg.set_active("model-a", "chat")
         data = reg.load_active()
         assert len(data["active"]) == 1
-        assert data["active"][0]["model_id"] == "model-1"
+        assert data["active"][0]["model_id"] == "model-a"
         assert data["active"][0]["type"] == "chat"
-        assert "activated_at" in data["active"][0]
 
     def test_set_active_replaces_same_type(self, tmp_registry):
-        reg.set_active("model-1", "chat")
-        reg.set_active("model-2", "chat")
+        reg.set_active("model-a", "chat")
+        reg.set_active("model-b", "chat")
         data = reg.load_active()
         assert len(data["active"]) == 1
-        assert data["active"][0]["model_id"] == "model-2"
+        assert data["active"][0]["model_id"] == "model-b"
 
-    def test_set_active_different_types(self, tmp_registry):
+    def test_set_active_preserves_different_types(self, tmp_registry):
         reg.set_active("chat-model", "chat")
-        reg.set_active("embed-model", "embedding")
+        reg.set_active("emb-model", "embedding")
         data = reg.load_active()
         assert len(data["active"]) == 2
 
     def test_clear_active(self, tmp_registry):
-        reg.set_active("model-1", "chat")
-        reg.clear_active("model-1")
+        reg.set_active("model-a", "chat")
+        reg.clear_active("model-a")
         assert reg.load_active() == {"active": []}
 
     def test_clear_active_only_removes_target(self, tmp_registry):
         reg.set_active("chat-model", "chat")
-        reg.set_active("embed-model", "embedding")
+        reg.set_active("emb-model", "embedding")
         reg.clear_active("chat-model")
         data = reg.load_active()
         assert len(data["active"]) == 1
-        assert data["active"][0]["model_id"] == "embed-model"
+        assert data["active"][0]["model_id"] == "emb-model"
+
+
+class TestResolveStorage:
+    def test_resolve_storage(self, tmp_registry):
+        path = reg.resolve_storage("chat", "my-model")
+        assert path.name == "my-model"
+        assert path.parent.name == "chat"

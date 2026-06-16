@@ -1,0 +1,21 @@
+[project]
+name = "llms-gateway"
+version = "0.2.0"
+description = "LLM Inference Gateway — monorepo"
+requires-python = ">=3.10"
+dependencies = [
+    "modelctl-core",
+    "modelctl",
+]
+
+[tool.uv.sources]
+modelctl-core = { workspace = true }
+modelctl = { workspace = true }
+
+[tool.uv.workspace]
+members = ["libs/*", "apps/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]

@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import sys
 import time
 from pathlib import Path
 
+from modelctl_core import registry
+from modelctl_core import huggingface as hf
+from modelctl_core import validator
+from modelctl_core.models import Model, Artifact, Download
+
 from . import __version__
-from . import registry
-from . import huggingface as hf
-from . import validator
-from .models import Model, Artifact, Download
 
 
 def _storage_path(model) -> Path:
     """Resolve the absolute storage path for a model, works in host and container."""
     rel = model.storage_path
-    # Handle both old format ("storage/chat/xxx") and new format ("chat/xxx")
     if rel.startswith("storage/"):
         rel = rel[len("storage/"):]
     return registry.STORAGE_DIR / rel
@@ -192,8 +193,7 @@ def cmd_install(repo_id: str, filename: str):
         file_type="gguf",
         sha256=validator.sha256(dest),
     )
-    installed_at = __import__("datetime").datetime.now(
-        __import__("datetime").timezone.utc).isoformat()
+    installed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     registry.update_model(
         model.id,
         status="installed",
@@ -376,7 +376,6 @@ def cmd_verify(model_id: str):
 
 def cmd_reload():
     """Reload the server with the currently active model."""
-    import os
     try:
         # Read PID file written by entrypoint, or pkill as fallback
         pid_file = "/tmp/llama-server.pid"
@@ -399,48 +398,64 @@ def cmd_reload():
         print(f"Reload failed: {e}")
 
 
+def cmd_version():
+    """Show version."""
+    print(f"modelctl v{__version__}")
+
+
+# ── main ───────────────────────────────────────────────────────────────
+
+COMMANDS = {
+    "search":    (cmd_search,    "Search HuggingFace for GGUF models"),
+    "inspect":   (cmd_inspect,   "Show repository details and files"),
+    "install":   (cmd_install,   "Download and register a model"),
+    "list":      (cmd_list,      "List installed models"),
+    "info":      (cmd_info,      "Show model details"),
+    "activate":  (cmd_activate,  "Activate a model for serving"),
+    "deactivate":(cmd_deactivate,"Deactivate a model"),
+    "active":    (cmd_active,    "Show active models"),
+    "remove":    (cmd_remove,    "Remove a model and its files"),
+    "verify":    (cmd_verify,    "Verify installed model files"),
+    "reload":    (cmd_reload,    "Reload server with active model"),
+    "version":   (cmd_version,   "Show modelctl version"),
+}
+
+
 def main():
     if len(sys.argv) < 2:
-        print(f"modelctl v{__version__}")
-        print("Usage:")
-        print("  modelctl search <query>           Search HuggingFace for GGUF repos")
-        print("  modelctl inspect <repo_id>        Show repo details and available files")
-        print("  modelctl install <repo> <file>    Download and register a model")
-        print("  modelctl list                     Show installed models")
-        print("  modelctl info <model_id>          Show model details")
-        print("  modelctl activate <model_id>      Activate and reload server")
-        print("  modelctl activate <id> --no-reload  Activate without reload")
-        print("  modelctl deactivate <model_id>    Deactivate a model")
-        print("  modelctl active                   Show active models")
-        print("  modelctl remove <model_id>        Remove a model")
-        print("  modelctl verify <model_id>        Verify model files")
-        print("  modelctl reload                   Reload server with active model")
+        print("modelctl — Model Management CLI\n")
+        print("Usage: modelctl <command> [args]\n")
+        print("Commands:")
+        for name, (_, desc) in COMMANDS.items():
+            print(f"  {name:<14} {desc}")
         return
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
-    commands = {
-        "search": lambda: cmd_search(args),
-        "inspect": lambda: cmd_inspect(args[0]) if args else print("Usage: modelctl inspect <repo_id>"),
-        "install": lambda: cmd_install(args[0], args[1]) if len(args) >= 2 else print("Usage: modelctl install <repo_id> <filename>"),
-        "list": cmd_list,
-        "info": lambda: cmd_info(args[0]) if args else print("Usage: modelctl info <model_id>"),
-        "activate": lambda: cmd_activate(args[0], "--no-reload" in args) if args else print("Usage: modelctl activate <model_id> [--no-reload]"),
-        "deactivate": lambda: cmd_deactivate(args[0]) if args else print("Usage: modelctl deactivate <model_id>"),
-        "active": cmd_active,
-        "remove": lambda: cmd_remove(args[0]) if args else print("Usage: modelctl remove <model_id>"),
-        "verify": lambda: cmd_verify(args[0]) if args else print("Usage: modelctl verify <model_id>"),
-        "reload": cmd_reload,
-    }
-
-    fn = commands.get(cmd)
-    if fn:
-        fn()
-    else:
+    if cmd not in COMMANDS:
         print(f"Unknown command: {cmd}")
-        print("Run 'modelctl' for usage.")
+        print(f"Available: {', '.join(COMMANDS)}")
+        sys.exit(1)
 
+    handler, _ = COMMANDS[cmd]
 
-if __name__ == "__main__":
-    main()
+    if cmd == "search":
+        handler(args)
+    elif cmd == "inspect":
+        if not args:
+            print("Usage: modelctl inspect <repo_id>")
+            return
+        handler(args[0])
+    elif cmd == "install":
+        if not args:
+            print("Usage: modelctl install <repo_id> <filename>")
+            return
+        handler(args[0], args[1] if len(args) > 1 else "")
+    elif cmd in ("info", "activate", "deactivate", "remove", "verify"):
+        if not args:
+            print(f"Usage: modelctl {cmd} <model_id>")
+            return
+        handler(args[0])
+    else:
+        handler()

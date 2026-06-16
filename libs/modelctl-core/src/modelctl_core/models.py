@@ -70,7 +70,7 @@ class Model:
             self.artifacts = [a if isinstance(
                 a, Artifact) else Artifact(**a) for a in self.artifacts]
         if not self.storage_path and self.id:
-            self.storage_path = f"storage/{self.type}/{self.id}"
+            self.storage_path = f"{self.type}/{self.id}"
 
     def to_dict(self) -> dict:
         d = asdict(self)

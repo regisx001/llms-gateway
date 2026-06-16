@@ -1,11 +1,10 @@
 """Tests for file validation."""
 
 import hashlib
-import os
 import tempfile
 from pathlib import Path
 
-from modelctl import validator
+from modelctl_core import validator
 
 
 def test_sha256():
@@ -49,7 +48,6 @@ def test_validate_gguf_magic_bytes(tmp_path):
     f = tmp_path / "model.gguf"
     f.write_bytes(b"\x47\x47\x55\x46" + b"\x00" * 100)
     issues = validator.validate_file(f)
-    # The validator checks magic bytes only for .gguf files
     gguf_issues = [i for i in issues if "magic" in i.lower()]
     assert len(gguf_issues) == 0
 
