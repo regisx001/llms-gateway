@@ -1,12 +1,17 @@
 services:
 
   llama-server:
-    image: ${LLAMACPP_IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile.llamacpp.server
+      args:
+        LLAMACPP_IMAGE: ${LLAMACPP_IMAGE}
     container_name: llama-server
     restart: unless-stopped
     ports:
       - "${LLAMACPP_PORT}:8080"
     volumes:
+      - ./model-manager/registry:/opt/model-manager/registry
       - ./model-manager/storage:/models
     command: >
-      --host 0.0.0.0 --port 8080 -m /models/active.gguf
+      --host 0.0.0.0 --port 8080

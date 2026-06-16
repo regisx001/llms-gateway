@@ -9,9 +9,17 @@ from typing import Optional
 
 from .models import Model, Download
 
-ROOT = Path(__file__).resolve().parent.parent
-REGISTRY_DIR = ROOT / "registry"
-STORAGE_DIR = ROOT / "storage"
+# Detect environment: container vs host
+# Container: registry mounted at /opt/model-manager/registry
+# Host:      registry is next to the modelctl package
+_CONTAINER_REGISTRY = Path("/opt/model-manager/registry")
+if _CONTAINER_REGISTRY.exists():
+    REGISTRY_DIR = _CONTAINER_REGISTRY
+    STORAGE_DIR = Path("/models")
+else:
+    ROOT = Path(__file__).resolve().parent.parent
+    REGISTRY_DIR = ROOT / "registry"
+    STORAGE_DIR = ROOT / "storage"
 
 MODELS_PATH = REGISTRY_DIR / "models.json"
 DOWNLOADS_PATH = REGISTRY_DIR / "downloads.json"

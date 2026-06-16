@@ -13,7 +13,14 @@ from . import huggingface as hf
 from . import validator
 from .models import Model, Artifact, Download
 
-HERE = Path(__file__).resolve().parent.parent
+
+def _storage_path(model) -> Path:
+    """Resolve the absolute storage path for a model, works in host and container."""
+    rel = model.storage_path
+    # Handle both old format ("storage/chat/xxx") and new format ("chat/xxx")
+    if rel.startswith("storage/"):
+        rel = rel[len("storage/"):]
+    return registry.STORAGE_DIR / rel
 
 
 def _size_str(n: int) -> str:
@@ -190,7 +197,7 @@ def cmd_install(repo_id: str, filename: str):
     registry.update_model(
         model.id,
         status="installed",
-        storage_path=str(storage_dir.relative_to(HERE)),
+        storage_path=f"{model.type}/{model.id}",
         artifacts=[artifact],
         installed_at=installed_at,
     )
@@ -246,7 +253,7 @@ def cmd_info(model_id: str):
             print(f"    SHA256: {a.sha256}")
 
 
-def cmd_activate(model_id: str):
+def cmd_activate(model_id: str, no_reload: bool = False):
     """Activate a model for serving."""
     m = registry.find_model(model_id)
     if not m:
@@ -264,10 +271,10 @@ def cmd_activate(model_id: str):
         return
 
     # Create relative symlink: storage/active.gguf → chat/xxx/files/xxx.gguf
-    storage_dir = HERE / "storage"
+    storage_dir = registry.STORAGE_DIR
     storage_dir.mkdir(exist_ok=True)
     symlink = storage_dir / "active.gguf"
-    target = HERE / m.storage_path / primary.path
+    target = _storage_path(m) / primary.path
     relative_target = os.path.relpath(target, storage_dir)
 
     if symlink.is_symlink() or symlink.exists():
@@ -278,6 +285,9 @@ def cmd_activate(model_id: str):
     print(f"Activated: {model_id} ({m.type})")
     print(f"  Symlink: storage/active.gguf → {relative_target}")
 
+    if not no_reload:
+        cmd_reload()
+
 
 def cmd_deactivate(model_id: str):
     """Deactivate a model."""
@@ -285,7 +295,7 @@ def cmd_deactivate(model_id: str):
         print(f"Model not found: {model_id}")
         return
     registry.clear_active(model_id)
-    symlink = HERE / "storage" / "active.gguf"
+    symlink = registry.STORAGE_DIR / "active.gguf"
     if symlink.is_symlink() or symlink.exists():
         symlink.unlink()
     print(f"Deactivated: {model_id}")
@@ -315,11 +325,11 @@ def cmd_remove(model_id: str):
 
     registry.clear_active(model_id)
 
-    symlink = HERE / "storage" / "active.gguf"
+    symlink = registry.STORAGE_DIR / "active.gguf"
     if symlink.is_symlink() or symlink.exists():
         symlink.unlink()
 
-    storage_path = HERE / m.storage_path
+    storage_path = _storage_path(m)
     if storage_path.exists():
         import shutil
         shutil.rmtree(storage_path)
@@ -336,7 +346,7 @@ def cmd_verify(model_id: str):
         print(f"Model not found: {model_id}")
         return
 
-    storage_path = HERE / m.storage_path
+    storage_path = _storage_path(m)
     print(f"Verifying {model_id}...\n")
 
     all_ok = True
@@ -364,6 +374,31 @@ def cmd_verify(model_id: str):
         print(f"\nSome checks failed for {model_id}")
 
 
+def cmd_reload():
+    """Reload the server with the currently active model."""
+    import os
+    try:
+        # Read PID file written by entrypoint, or pkill as fallback
+        pid_file = "/tmp/llama-server.pid"
+        if os.path.exists(pid_file):
+            with open(pid_file) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 15)  # SIGTERM
+            print("Reloading server with active model...")
+        else:
+            import subprocess
+            result = subprocess.run(
+                ["pkill", "-SIGTERM", "-x", "llama-server"],
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                print("Reloading server with active model...")
+            else:
+                print("No running llama-server found to reload")
+    except Exception as e:
+        print(f"Reload failed: {e}")
+
+
 def main():
     if len(sys.argv) < 2:
         print(f"modelctl v{__version__}")
@@ -373,11 +408,13 @@ def main():
         print("  modelctl install <repo> <file>    Download and register a model")
         print("  modelctl list                     Show installed models")
         print("  modelctl info <model_id>          Show model details")
-        print("  modelctl activate <model_id>      Activate a model")
+        print("  modelctl activate <model_id>      Activate and reload server")
+        print("  modelctl activate <id> --no-reload  Activate without reload")
         print("  modelctl deactivate <model_id>    Deactivate a model")
         print("  modelctl active                   Show active models")
         print("  modelctl remove <model_id>        Remove a model")
         print("  modelctl verify <model_id>        Verify model files")
+        print("  modelctl reload                   Reload server with active model")
         return
 
     cmd = sys.argv[1]
@@ -389,11 +426,12 @@ def main():
         "install": lambda: cmd_install(args[0], args[1]) if len(args) >= 2 else print("Usage: modelctl install <repo_id> <filename>"),
         "list": cmd_list,
         "info": lambda: cmd_info(args[0]) if args else print("Usage: modelctl info <model_id>"),
-        "activate": lambda: cmd_activate(args[0]) if args else print("Usage: modelctl activate <model_id>"),
+        "activate": lambda: cmd_activate(args[0], "--no-reload" in args) if args else print("Usage: modelctl activate <model_id> [--no-reload]"),
         "deactivate": lambda: cmd_deactivate(args[0]) if args else print("Usage: modelctl deactivate <model_id>"),
         "active": cmd_active,
         "remove": lambda: cmd_remove(args[0]) if args else print("Usage: modelctl remove <model_id>"),
         "verify": lambda: cmd_verify(args[0]) if args else print("Usage: modelctl verify <model_id>"),
+        "reload": cmd_reload,
     }
 
     fn = commands.get(cmd)
