@@ -1,6 +1,6 @@
 """Tests for data models."""
 
-from modelctl.models import Model, Artifact, Download
+from modelctl_core.models import Model, Artifact, Download
 
 
 class TestArtifact:
@@ -63,7 +63,7 @@ class TestModel:
 
     def test_auto_storage_path(self):
         m = Model(name="X", type="embedding")
-        assert m.storage_path == f"storage/embedding/{m.id}"
+        assert m.storage_path == f"embedding/{m.id}"
 
     def test_explicit_id(self):
         m = Model(id="my-custom-id")

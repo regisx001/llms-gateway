@@ -1,0 +1,70 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      cli: ${{ steps.filter.outputs.cli }}
+      config: ${{ steps.filter.outputs.config }}
+      core_files: ${{ steps.filter.outputs.core_files }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          list-files: shell
+          filters: |
+            core:
+              - 'libs/modelctl-core/**'
+            cli:
+              - 'apps/modelctl/**'
+            config:
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/**'
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-packages
+
+      - name: Select tests to run
+        id: select
+        run: |
+          if [ "${{ needs.changes.outputs.config }}" = "true" ] || [ "${{ needs.changes.outputs.cli }}" = "true" ]; then
+            echo "target=tests/" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Map changed core source files to their test files
+          targets=$(echo "${{ needs.changes.outputs.core_files }}" | while IFS= read -r f; do
+            t=$(echo "$f" | sed 's|libs/modelctl-core/src/modelctl_core/\(.*\)\.py|tests/test_\1.py|')
+            [ -f "$t" ] && echo "$t"
+          done | sort -u | tr '\n' ' ')
+          if [ -n "$targets" ]; then
+            echo "target=$targets" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=tests/" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        run: uv run pytest ${{ steps.select.outputs.target }} -v

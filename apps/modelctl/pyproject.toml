@@ -1,0 +1,18 @@
+[project]
+name = "modelctl"
+version = "0.2.0"
+description = "Model Management CLI"
+requires-python = ">=3.10"
+dependencies = [
+    "modelctl-core",
+    "requests>=2.28",
+]
+
+[project.scripts]
+modelctl = "modelctl.cli:main"
+
+[tool.uv.sources]
+modelctl-core = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]

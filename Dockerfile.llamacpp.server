@@ -11,10 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-requests \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install modelctl
-COPY model-manager/modelctl/ /opt/modelctl/modelctl/
-COPY model-manager/pyproject.toml /opt/modelctl/pyproject.toml
-RUN pip3 install /opt/modelctl --break-system-packages --no-cache-dir
+# Copy and install modelctl-core (lib) then modelctl (CLI app)
+COPY libs/modelctl-core/ /opt/modelctl-core/
+COPY apps/modelctl/ /opt/modelctl/
+RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir && \
+    pip3 install /opt/modelctl --break-system-packages --no-cache-dir
 
 # Entrypoint — starts server with or without active model
 COPY entrypoint.sh /entrypoint.sh

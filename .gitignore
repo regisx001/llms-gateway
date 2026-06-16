@@ -6,6 +6,6 @@ __pycache__
 dist/
 build/
 .storage/
-model-manager/storage/
-model-manager/registry/
+storage/
+registry/
 .DS_Store
