@@ -7,7 +7,7 @@ services:
       args:
         LLAMACPP_IMAGE: ${LLAMACPP_IMAGE}
     container_name: llama-server
-    restart: unless-stopped
+    # restart: unless-stopped
     ports:
       - "${LLAMACPP_PORT}:8080"
     volumes:
