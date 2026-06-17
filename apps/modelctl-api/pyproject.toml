@@ -1,0 +1,24 @@
+[project]
+name = "modelctl-api"
+version = "0.1.0"
+description = "REST API for modelctl — model management"
+requires-python = ">=3.10"
+dependencies = [
+    "modelctl-core",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[tool.uv.sources]
+modelctl-core = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,16 +1,29 @@
 #!/bin/sh
-# entrypoint.sh — start llama-server with active model, reload on SIGTERM
+# entrypoint.sh — start llama-server + modelctl-api (FastAPI)
+
+set -e
 
 LLAMA_SERVER=/app/llama-server
-PID_FILE=/tmp/llama-server.pid
+LLAMA_PID_FILE=/tmp/llama-server.pid
 
-start_server() {
+# ── Start modelctl-api (FastAPI) in background ──────────────────────
+# Container port is always 8000. The host port is mapped via docker-compose.
+API_PORT=8000
+start_modelctl_api() {
+    echo "Starting modelctl-api on port $API_PORT..."
+    uvicorn modelctl_api.main:app \
+        --host 0.0.0.0 \
+        --port "$API_PORT" \
+        --log-level info &
+}
+
+# ── Start llama-server with active model ────────────────────────────
+start_llama_server() {
     local model_flag=""
-    # Find any .gguf symlink (named after the model_id)
     for link in /models/*.gguf; do
         if [ -L "$link" ] && [ -f "$(readlink -f "$link" 2>/dev/null)" ]; then
-            echo "Loading: $(readlink -f "$link")"
-            model_flag="-m $link"
+            echo "Loading model: $(readlink -f "$link")"
+            model_flag="-m $(readlink -f "$link")"
             break
         fi
     done
@@ -20,17 +33,20 @@ start_server() {
 
     $LLAMA_SERVER --host 0.0.0.0 --port 8080 $model_flag "$@" &
     PID=$!
-    echo "$PID" > $PID_FILE
+    echo "$PID" > $LLAMA_PID_FILE
     wait $PID
-    rm -f $PID_FILE
+    rm -f $LLAMA_PID_FILE
 }
 
-echo "Starting llama-server..."
-start_server "$@"
+# ── Start both ──────────────────────────────────────────────────────
+start_modelctl_api
 
-# Loop: when server exits (modelctl reload), restart with updated symlink
+echo "Starting llama-server..."
+start_llama_server "$@"
+
+# Loop: when llama-server exits (modelctl reload), restart with updated model
 while true; do
-    echo "Restarting server with updated model..."
+    echo "Restarting llama-server with updated model..."
     sleep 1
-    start_server "$@"
+    start_llama_server "$@"
 done

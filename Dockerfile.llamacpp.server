@@ -1,31 +1,42 @@
 # Dockerfile.llamacpp.server
-# Builds a custom image with llama-server + modelctl
+# Builds a custom image with llama-server + modelctl CLI + modelctl-api
 
 ARG LLAMACPP_IMAGE
 FROM ${LLAMACPP_IMAGE}
 
-# Install Python for modelctl
+# Install Python for modelctl + FastAPI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-requests \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install modelctl-core (lib) then modelctl (CLI app)
+# Copy and install modelctl-core (lib)
 COPY libs/modelctl-core/ /opt/modelctl-core/
-COPY apps/modelctl/ /opt/modelctl/
-RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir && \
-    pip3 install /opt/modelctl --break-system-packages --no-cache-dir
+RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir
 
-# Entrypoint — starts server with or without active model
+# Copy and install modelctl (CLI app)
+COPY apps/modelctl/ /opt/modelctl/
+RUN pip3 install /opt/modelctl --break-system-packages --no-cache-dir
+
+# Copy and install modelctl-api (FastAPI app)
+COPY apps/modelctl-api/ /opt/modelctl-api/
+RUN pip3 install /opt/modelctl-api --break-system-packages --no-cache-dir && \
+    pip3 install uvicorn --break-system-packages --no-cache-dir
+
+# Entrypoint — starts llama-server + modelctl-api
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Volume for model files (mounted at runtime)
 RUN mkdir -p /models
 
+EXPOSE 8080 8000
+
 ENTRYPOINT ["/entrypoint.sh"]
 
-# modelctl is available inside the container:
+# Tools available inside the container:
 #   docker compose exec llama-server modelctl list
 #   docker compose exec llama-server modelctl activate <id>
+#   curl http://localhost:8000/health
+#   curl http://localhost:8000/api/v1/models
