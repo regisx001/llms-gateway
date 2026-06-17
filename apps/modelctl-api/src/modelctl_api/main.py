@@ -104,8 +104,10 @@ def create_app() -> FastAPI:
         static_dir = Path(env_dir)
     else:
         candidates = [
-            Path("/opt/modelctl-api/static"),                    # container path
-            Path(__file__).resolve().parent.parent.parent / "static",  # source tree
+            # container path
+            Path("/opt/modelctl-api/static"),
+            Path(__file__).resolve().parent.parent.parent /
+            "static",  # source tree
         ]
         for candidate in candidates:
             if candidate.is_dir():
