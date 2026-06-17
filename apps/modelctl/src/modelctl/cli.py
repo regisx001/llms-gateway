@@ -270,20 +270,20 @@ def cmd_activate(model_id: str, no_reload: bool = False):
         print(f"No artifacts found for {model_id}")
         return
 
-    # Create relative symlink: storage/active.gguf → chat/xxx/files/xxx.gguf
+    # Remove all existing .gguf symlinks, then create the new one
     storage_dir = registry.STORAGE_DIR
     storage_dir.mkdir(exist_ok=True)
-    symlink = storage_dir / "active.gguf"
+    for p in storage_dir.glob("*.gguf"):
+        if p.is_symlink() or p.exists():
+            p.unlink()
+    symlink = storage_dir / f"{m.id}.gguf"
     target = _storage_path(m) / primary.path
     relative_target = os.path.relpath(target, storage_dir)
-
-    if symlink.is_symlink() or symlink.exists():
-        symlink.unlink()
     symlink.symlink_to(relative_target)
 
     registry.set_active(model_id, m.type)
     print(f"Activated: {model_id} ({m.type})")
-    print(f"  Symlink: storage/active.gguf → {relative_target}")
+    print(f"  Symlink: storage/{m.id}.gguf → {relative_target}")
 
     if not no_reload:
         cmd_reload()
@@ -291,11 +291,12 @@ def cmd_activate(model_id: str, no_reload: bool = False):
 
 def cmd_deactivate(model_id: str):
     """Deactivate a model."""
-    if not registry.find_model(model_id):
+    m = registry.find_model(model_id)
+    if not m:
         print(f"Model not found: {model_id}")
         return
     registry.clear_active(model_id)
-    symlink = registry.STORAGE_DIR / "active.gguf"
+    symlink = registry.STORAGE_DIR / f"active-{m.type}.gguf"
     if symlink.is_symlink() or symlink.exists():
         symlink.unlink()
     print(f"Deactivated: {model_id}")
@@ -325,7 +326,7 @@ def cmd_remove(model_id: str):
 
     registry.clear_active(model_id)
 
-    symlink = registry.STORAGE_DIR / "active.gguf"
+    symlink = registry.STORAGE_DIR / f"{m.id}.gguf"
     if symlink.is_symlink() or symlink.exists():
         symlink.unlink()
 
