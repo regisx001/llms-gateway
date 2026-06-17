@@ -84,13 +84,40 @@ def create_app() -> FastAPI:
     async def modelctl_error_handler(request: Request, exc: ModelctlError):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-    # ── register routers ────────────────────────────────────────────
+    # ── register routers (API routes take precedence) ────────────────
     from modelctl_api.routers import health, models, search, system
 
     app.include_router(health.router)
     app.include_router(models.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
     app.include_router(system.router, prefix="/api/v1")
+
+    # ── serve SPA frontend (optional — built by the web/ project) ────
+    import os
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+
+    # Resolve static directory — check env var, container path, then source tree
+    static_dir = None
+    env_dir = os.environ.get("MODELCTL_API_STATIC_DIR")
+    if env_dir:
+        static_dir = Path(env_dir)
+    else:
+        candidates = [
+            Path("/opt/modelctl-api/static"),                    # container path
+            Path(__file__).resolve().parent.parent.parent / "static",  # source tree
+        ]
+        for candidate in candidates:
+            if candidate.is_dir():
+                static_dir = candidate
+                break
+
+    if static_dir and static_dir.is_dir():
+        app.mount(
+            "/",
+            StaticFiles(directory=str(static_dir), html=True),
+            name="frontend",
+        )
 
     return app
 

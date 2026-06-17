@@ -9,3 +9,6 @@ build/
 storage/
 registry/
 .DS_Store
+
+# Frontend SPA build (output of web/ → served by modelctl-api)
+apps/modelctl-api/static/
