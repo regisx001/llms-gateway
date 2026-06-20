@@ -1,28 +1,28 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { config } from '$lib/config';
-	import logo from '$lib/assets/favicon.svg';
+	import { onMount } from "svelte";
+	import { config } from "$lib/config";
+	import logo from "$lib/assets/favicon.svg";
 
-	import * as Card from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import * as Table from '$lib/components/ui/table';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Input } from '$lib/components/ui/input';
-	import * as Alert from '$lib/components/ui/alert';
-	import { Separator } from '$lib/components/ui/separator';
-	import { Spinner } from '$lib/components/ui/spinner';
+	import * as Card from "$lib/components/ui/card";
+	import { Button } from "$lib/components/ui/button";
+	import { Badge } from "$lib/components/ui/badge";
+	import * as Table from "$lib/components/ui/table";
+	import { Skeleton } from "$lib/components/ui/skeleton";
+	import { Input } from "$lib/components/ui/input";
+	import * as Alert from "$lib/components/ui/alert";
+	import { Separator } from "$lib/components/ui/separator";
+	import { Spinner } from "$lib/components/ui/spinner";
 
-	import CuboidIcon from '@lucide/svelte/icons/cuboid';
-	import ActivityIcon from '@lucide/svelte/icons/activity';
-	import DatabaseIcon from '@lucide/svelte/icons/database';
-	import CpuIcon from '@lucide/svelte/icons/cpu';
-	import SearchIcon from '@lucide/svelte/icons/search';
-	import PlayIcon from '@lucide/svelte/icons/play';
-	import SquareIcon from '@lucide/svelte/icons/square';
-	import Trash2Icon from '@lucide/svelte/icons/trash-2';
-	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-	import AlertCircleIcon from '@lucide/svelte/icons/alert-circle';
+	import CuboidIcon from "@lucide/svelte/icons/cuboid";
+	import ActivityIcon from "@lucide/svelte/icons/activity";
+	import DatabaseIcon from "@lucide/svelte/icons/database";
+	import CpuIcon from "@lucide/svelte/icons/cpu";
+	import SearchIcon from "@lucide/svelte/icons/search";
+	import PlayIcon from "@lucide/svelte/icons/play";
+	import SquareIcon from "@lucide/svelte/icons/square";
+	import Trash2Icon from "@lucide/svelte/icons/trash-2";
+	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+	import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
 
 	// ── State ────────────────────────────────────────────────────────
 
@@ -45,17 +45,15 @@
 			size: string;
 		}[]
 	>([]);
-	let searchQuery = $state('');
+	let searchQuery = $state("");
 
 	// Derived: active model name for display
-	let activeModelName = $derived(
-		systemInfo?.active_models?.[0] ?? null
-	);
+	let activeModelName = $derived(systemInfo?.active_models?.[0] ?? null);
 
 	// ── Helpers ──────────────────────────────────────────────────────
 
 	function sizeStr(bytes: number): string {
-		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const units = ["B", "KB", "MB", "GB", "TB"];
 		let n = bytes;
 		for (const unit of units) {
 			if (n < 1024) return `${n.toFixed(1)} ${unit}`;
@@ -67,14 +65,16 @@
 	async function fetchJson<T>(path: string): Promise<T> {
 		const res = await fetch(`${config.apiBase}${path}`);
 		if (!res.ok) {
-			const body = await res.json().catch(() => ({ detail: res.statusText }));
+			const body = await res
+				.json()
+				.catch(() => ({ detail: res.statusText }));
 			throw new Error(body.detail || `HTTP ${res.status}`);
 		}
 		return res.json();
 	}
 
 	async function postAction(path: string) {
-		await fetch(`${config.apiBase}${path}`, { method: 'POST' });
+		await fetch(`${config.apiBase}${path}`, { method: "POST" });
 		await loadData();
 	}
 
@@ -85,14 +85,14 @@
 		error = null;
 		try {
 			const [health, info, modelList] = await Promise.all([
-				fetchJson<{ status: string; version: string }>('/health'),
+				fetchJson<{ status: string; version: string }>("/health"),
 				fetchJson<{
 					version: string;
 					storage_used: string;
 					storage_free: string;
 					models_count: number;
 					active_models: string[];
-				}>('/api/v1/system/info'),
+				}>("/api/v1/system/info"),
 				fetchJson<{
 					models: {
 						id: string;
@@ -101,7 +101,7 @@
 						status: string;
 						artifacts: { size: number }[];
 					}[];
-				}>('/api/v1/models')
+				}>("/api/v1/models"),
 			]);
 
 			healthStatus = health.status;
@@ -111,13 +111,11 @@
 				name: m.name,
 				type: m.type,
 				status: m.status,
-				size: sizeStr(
-					m.artifacts.reduce((acc, a) => acc + a.size, 0)
-				)
+				size: sizeStr(m.artifacts.reduce((acc, a) => acc + a.size, 0)),
 			}));
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load data';
-			healthStatus = 'error';
+			error = e instanceof Error ? e.message : "Failed to load data";
+			healthStatus = "error";
 		} finally {
 			loading = false;
 		}
@@ -141,7 +139,7 @@
 			</div>
 		</div>
 		<div class="flex items-center gap-3">
-			{#if healthStatus === 'ok'}
+			{#if healthStatus === "ok"}
 				<Badge variant="outline" class="gap-1.5">
 					<span class="relative flex size-2">
 						<span
@@ -160,7 +158,10 @@
 				</Badge>
 			{:else}
 				<Badge variant="destructive" class="gap-1.5">
-					<AlertCircleIcon data-icon="inline-start" class="size-3.5" />
+					<AlertCircleIcon
+						data-icon="inline-start"
+						class="size-3.5"
+					/>
 					Offline
 				</Badge>
 			{/if}
@@ -200,7 +201,7 @@
 						Models
 					</Card.Description>
 					<Card.Title class="text-3xl font-bold tabular-nums">
-						{systemInfo?.models_count ?? '?'}
+						{systemInfo?.models_count ?? "?"}
 					</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -212,7 +213,7 @@
 						Active
 					</Card.Description>
 					<Card.Title class="truncate text-xl font-bold">
-						{activeModelName || '—'}
+						{activeModelName || "—"}
 					</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -224,9 +225,11 @@
 						Storage
 					</Card.Description>
 					<Card.Title class="text-xl font-bold tabular-nums">
-						{systemInfo?.storage_used ?? '?'}
-						<span class="text-base font-normal text-muted-foreground">
-							/ {systemInfo?.storage_free ?? '?'}
+						{systemInfo?.storage_used ?? "?"}
+						<span
+							class="text-base font-normal text-muted-foreground"
+						>
+							/ {systemInfo?.storage_free ?? "?"}
 						</span>
 					</Card.Title>
 				</Card.Header>
@@ -238,8 +241,10 @@
 						<CpuIcon class="size-4" />
 						llama.cpp
 					</Card.Description>
-					<Card.Title class="flex items-center gap-2 text-base font-bold">
-						{#if healthStatus === 'ok'}
+					<Card.Title
+						class="flex items-center gap-2 text-base font-bold"
+					>
+						{#if healthStatus === "ok"}
 							<span class="relative flex size-2">
 								<span
 									class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
@@ -250,7 +255,8 @@
 							</span>
 							Running
 						{:else}
-							<span class="size-2 rounded-full bg-destructive"></span>
+							<span class="size-2 rounded-full bg-destructive"
+							></span>
 							Offline
 						{/if}
 					</Card.Title>
@@ -300,7 +306,7 @@
 		<Card.Header>
 			<Card.Title>Installed Models</Card.Title>
 			<Card.Description>
-				{models.length} model{models.length !== 1 ? 's' : ''} in registry
+				{models.length} model{models.length !== 1 ? "s" : ""} in registry
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -317,7 +323,8 @@
 						No models installed yet.
 					</p>
 					<p class="text-xs text-muted-foreground">
-						Use the search bar above to find and install models from HuggingFace.
+						Use the search bar above to find and install models from
+						HuggingFace.
 					</p>
 				</div>
 			{:else}
@@ -337,35 +344,48 @@
 								<Table.Cell class="font-medium">
 									{m.name}
 								</Table.Cell>
-								<Table.Cell class="capitalize text-muted-foreground">
+								<Table.Cell
+									class="capitalize text-muted-foreground"
+								>
 									{m.type}
 								</Table.Cell>
-								<Table.Cell class="tabular-nums text-muted-foreground">
+								<Table.Cell
+									class="tabular-nums text-muted-foreground"
+								>
 									{m.size}
 								</Table.Cell>
 								<Table.Cell>
-									{#if m.status === 'installed'}
-										<Badge variant="secondary">Installed</Badge>
-									{:else if m.status === 'active'}
+									{#if m.status === "installed"}
+										<Badge variant="secondary"
+											>Installed</Badge
+										>
+									{:else if m.status === "active"}
 										<Badge>Active</Badge>
-									{:else if m.status === 'downloading'}
+									{:else if m.status === "downloading"}
 										<Badge variant="outline" class="gap-1">
 											<Spinner class="size-3" />
 											Downloading
 										</Badge>
-									{:else if m.status === 'error'}
-										<Badge variant="destructive">Error</Badge>
+									{:else if m.status === "error"}
+										<Badge variant="destructive"
+											>Error</Badge
+										>
 									{:else}
-										<Badge variant="outline">{m.status}</Badge>
+										<Badge variant="outline"
+											>{m.status}</Badge
+										>
 									{/if}
 								</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex justify-end gap-1">
-										{#if m.status === 'installed'}
+										{#if m.status === "installed"}
 											<Button
 												variant="outline"
 												size="sm"
-												onclick={() => postAction(`/api/v1/models/${m.id}/activate`)}
+												onclick={() =>
+													postAction(
+														`/api/v1/models/${m.id}/activate`,
+													)}
 											>
 												<PlayIcon class="size-3.5" />
 												Activate
@@ -376,7 +396,9 @@
 												variant="outline"
 												size="sm"
 												onclick={() =>
-													postAction(`/api/v1/models/${m.id}/deactivate`)}
+													postAction(
+														`/api/v1/models/${m.id}/deactivate`,
+													)}
 											>
 												<SquareIcon class="size-3.5" />
 												Deactivate
@@ -387,11 +409,20 @@
 											size="sm"
 											class="text-destructive hover:text-destructive"
 											onclick={() => {
-												if (confirm(`Remove model "${m.name}"?`)) {
-													postAction(`/api/v1/models/${m.id}/deactivate`);
-													fetch(`${config.apiBase}/api/v1/models/${m.id}`, {
-														method: 'DELETE'
-													}).then(() => loadData());
+												if (
+													confirm(
+														`Remove model "${m.name}"?`,
+													)
+												) {
+													postAction(
+														`/api/v1/models/${m.id}/deactivate`,
+													);
+													fetch(
+														`${config.apiBase}/api/v1/models/${m.id}`,
+														{
+															method: "DELETE",
+														},
+													).then(() => loadData());
 												}
 											}}
 										>
@@ -408,16 +439,18 @@
 	</Card.Root>
 
 	<!-- ── Footer ────────────────────────────────────────────────── -->
-	<footer class="flex items-center justify-between text-xs text-muted-foreground">
-		<p>modelctl {systemInfo?.version ?? '—'}</p>
+	<footer
+		class="flex items-center justify-between text-xs text-muted-foreground"
+	>
+		<p>modelctl {systemInfo?.version ?? "—"}</p>
 		<Separator class="mx-3 h-4" decorative orientation="vertical" />
 		<p>
-			{new Date().toLocaleDateString('en-US', {
-				year: 'numeric',
-				month: 'short',
-				day: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
+			{new Date().toLocaleDateString("en-US", {
+				year: "numeric",
+				month: "short",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
 			})}
 		</p>
 	</footer>
