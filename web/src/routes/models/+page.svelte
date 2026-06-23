@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import { config } from "$lib/config";
     import * as Card from "$lib/components/ui/card";
     import * as Table from "$lib/components/ui/table";
@@ -7,15 +7,20 @@
     import { Button } from "$lib/components/ui/button";
     import { Skeleton } from "$lib/components/ui/skeleton";
     import { Spinner } from "$lib/components/ui/spinner";
+    import { Separator } from "$lib/components/ui/separator";
     import CuboidIcon from "@lucide/svelte/icons/cuboid";
     import PlayIcon from "@lucide/svelte/icons/play";
     import SquareIcon from "@lucide/svelte/icons/square";
     import Trash2Icon from "@lucide/svelte/icons/trash-2";
+    import SearchIcon from "@lucide/svelte/icons/search";
+    import { goto } from "$app/navigation";
 
     let models = $state<any[]>([]);
     let activeModelId = $state<string | null>(null);
     let loading = $state(true);
     let error = $state<string | null>(null);
+    let polling = $state(false);
+    let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
 
     function sizeStr(bytes: number): string {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -28,7 +33,6 @@
     }
 
     async function loadModels() {
-        loading = true;
         error = null;
         try {
             const [modelRes, infoRes] = await Promise.all([
@@ -51,10 +55,33 @@
                     ) ?? 0,
                 ),
             }));
+
+            // Start polling if any models are downloading
+            const hasDownloading = models.some(
+                (m: any) => m.status === "downloading",
+            );
+            if (hasDownloading && !polling) {
+                startPolling();
+            } else if (!hasDownloading && polling) {
+                stopPolling();
+            }
         } catch (e) {
             error = e instanceof Error ? e.message : "Failed to load models";
         } finally {
             loading = false;
+        }
+    }
+
+    function startPolling() {
+        polling = true;
+        pollInterval = setInterval(loadModels, 2000);
+    }
+
+    function stopPolling() {
+        polling = false;
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
         }
     }
 
@@ -63,7 +90,13 @@
         await loadModels();
     }
 
-    onMount(loadModels);
+    onMount(() => {
+        loadModels();
+    });
+
+    onDestroy(() => {
+        stopPolling();
+    });
 </script>
 
 <svelte:head>
@@ -78,7 +111,15 @@
                 Manage installed models in the registry.
             </p>
         </div>
-        <Button variant="outline" onclick={loadModels}>Refresh</Button>
+        <div class="flex items-center gap-2">
+            {#if polling}
+                <Badge variant="outline" class="gap-1">
+                    <Spinner class="size-3" />
+                    Updating...
+                </Badge>
+            {/if}
+            <Button variant="outline" onclick={loadModels}>Refresh</Button>
+        </div>
     </div>
 
     {#if loading}
@@ -104,6 +145,15 @@
                     Go to the Search page to find and install models from
                     HuggingFace.
                 </p>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="mt-2"
+                    onclick={() => goto("/search")}
+                >
+                    <SearchIcon class="size-3.5" />
+                    Search Models
+                </Button>
             </Card.Content>
         </Card.Root>
     {:else}
@@ -183,16 +233,18 @@
                                                 Stop
                                             </Button>
                                         {/if}
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onclick={() =>
-                                                postAction(
-                                                    `/api/v1/models/${m.id}/remove`,
-                                                )}
-                                        >
-                                            <Trash2Icon class="size-3.5" />
-                                        </Button>
+                                        {#if m.status !== "downloading"}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onclick={() =>
+                                                    postAction(
+                                                        `/api/v1/models/${m.id}/remove`,
+                                                    )}
+                                            >
+                                                <Trash2Icon class="size-3.5" />
+                                            </Button>
+                                        {/if}
                                     </div>
                                 </Table.Cell>
                             </Table.Row>
@@ -201,5 +253,21 @@
                 </Table.Root>
             </Card.Content>
         </Card.Root>
+
+        {#if models.some((m: any) => m.installed_at)}
+            <Separator />
+            <p class="text-xs text-muted-foreground">
+                {#each models.filter((m: any) => m.installed_at) as m}
+                    {#if m.installed_at}
+                        <span>
+                            {m.name} installed {new Date(m.installed_at).toLocaleDateString()}
+                            {#if m !== models[models.length - 1]}
+                                &middot;
+                            {/if}
+                        </span>
+                    {/if}
+                {/each}
+            </p>
+        {/if}
     {/if}
 </div>
