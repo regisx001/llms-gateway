@@ -21,6 +21,7 @@
     let error = $state<string | null>(null);
     let polling = $state(false);
     let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
+    let downloadProgress = $state<Map<string, { progressPct: number; downloadedBytes: number; totalBytes: number }>>(new Map());
 
     function sizeStr(bytes: number): string {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -55,6 +56,33 @@
                     ) ?? 0,
                 ),
             }));
+
+            // Fetch progress for downloading models
+            const downloadingModels = models.filter(
+                (m: any) => m.status === "downloading",
+            );
+            if (downloadingModels.length > 0) {
+                const progressResults = await Promise.allSettled(
+                    downloadingModels.map(async (m: any) => {
+                        const res = await fetch(
+                            `${config.apiBase}/api/v1/models/${m.id}/progress`,
+                        );
+                        if (!res.ok) return null;
+                        return { id: m.id, ...(await res.json()) };
+                    }),
+                );
+                const newProgress = new Map(downloadProgress);
+                for (const r of progressResults) {
+                    if (r.status === "fulfilled" && r.value) {
+                        newProgress.set(r.value.id, {
+                            progressPct: r.value.progress_pct,
+                            downloadedBytes: r.value.downloaded_bytes,
+                            totalBytes: r.value.total_bytes,
+                        });
+                    }
+                }
+                downloadProgress = newProgress;
+            }
 
             // Start polling if any models are downloading
             const hasDownloading = models.some(
@@ -191,10 +219,26 @@
                                     {:else if m.status === "active"}
                                         <Badge>Active</Badge>
                                     {:else if m.status === "downloading"}
-                                        <Badge variant="outline" class="gap-1">
-                                            <Spinner class="size-3" />
-                                            Downloading
-                                        </Badge>
+                                        {@const prog = downloadProgress.get(m.id)}
+                                        <div class="flex flex-col gap-1">
+                                            <Badge variant="outline" class="gap-1">
+                                                <Spinner class="size-3" />
+                                                Downloading
+                                            </Badge>
+                                            {#if prog}
+                                                <div class="w-24">
+                                                    <div class="mb-0.5 text-[10px] tabular-nums text-muted-foreground">
+                                                        {prog.progressPct}%
+                                                    </div>
+                                                    <div class="h-1 w-full overflow-hidden rounded-full bg-muted">
+                                                        <div
+                                                            class="h-full rounded-full bg-primary transition-all duration-500"
+                                                            style="width: {prog.progressPct}%"
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            {/if}
+                                        </div>
                                     {:else if m.status === "error"}
                                         <Badge variant="destructive"
                                             >Error</Badge

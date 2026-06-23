@@ -151,7 +151,8 @@ class ModelService:
             destination=str(files_dir / filename),
             total_bytes=total_size,
             status="downloading",
-            started_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            started_at=datetime.datetime.now(
+                datetime.timezone.utc).isoformat(),
         )
         registry.add_download(dl)
 

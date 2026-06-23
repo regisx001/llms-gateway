@@ -8,16 +8,12 @@
     import * as Sheet from "$lib/components/ui/sheet";
     import XIcon from "@lucide/svelte/icons/x";
     import DownloadIcon from "@lucide/svelte/icons/download";
-    import CheckCircle2Icon from "@lucide/svelte/icons/check-circle-2";
     import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
     import CuboidIcon from "@lucide/svelte/icons/cuboid";
-    import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
     import ThumbsUpIcon from "@lucide/svelte/icons/thumbs-up";
-    import TagIcon from "@lucide/svelte/icons/tag";
-    import BookOpenIcon from "@lucide/svelte/icons/book-open";
     import ScaleIcon from "@lucide/svelte/icons/scale";
-    import { goto } from "$app/navigation";
     import { cn } from "$lib/utils";
+    import { startDownload } from "$lib/stores/downloads.svelte";
 
     interface InspectData {
         repo_id: string;
@@ -35,8 +31,6 @@
     type Phase =
         | "loading"
         | "inspect"
-        | "installing"
-        | "success"
         | "error";
 
     let {
@@ -121,12 +115,10 @@
     // ── Install ─────────────────────────────────────────────────
 
     async function installFile(filename: string) {
-        phase = "installing";
         installError = null;
-        let modelId: string | null = null;
 
         try {
-            // Start install
+            // Fire async install — returns immediately with 202
             const installRes = await fetch(`${config.apiBase}/api/v1/models/install`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -143,31 +135,13 @@
             }
 
             const installResult = await installRes.json();
-            modelId = installResult.id;
+            const modelId = installResult.id;
 
-            // Poll for completion
-            let attempts = 0;
-            const maxAttempts = 600; // 10 minutes at 1s intervals
-            while (attempts < maxAttempts) {
-                await new Promise((r) => setTimeout(r, 1000));
-                attempts++;
+            // Start polling via the notification store
+            startDownload(modelId, repoId, filename);
 
-                const statusRes = await fetch(
-                    `${config.apiBase}/api/v1/models/${modelId}`,
-                );
-                if (!statusRes.ok) continue;
-
-                const statusData = await statusRes.json();
-
-                if (statusData.status === "installed" || statusData.status === "active") {
-                    phase = "success";
-                    return;
-                }
-                if (statusData.status === "error") {
-                    throw new Error("Install failed — model is in error state");
-                }
-            }
-            throw new Error("Install timed out — check Models page for status");
+            // Close sheet — download continues in background
+            handleClose();
         } catch (e) {
             installError = e instanceof Error ? e.message : "Install failed";
             phase = "error";
@@ -183,11 +157,6 @@
             inspectError = null;
             installError = null;
         }, 300);
-    }
-
-    function goToModels() {
-        handleClose();
-        goto("/models");
     }
 
     // ── React to open/repoId changes ────────────────────────────
@@ -207,10 +176,6 @@
                 <Sheet.Title class="text-lg font-semibold">
                     {#if phase === "loading"}
                         Loading…
-                    {:else if phase === "installing"}
-                        Installing…
-                    {:else if phase === "success"}
-                        Installed
                     {:else if phase === "error" && !inspectData}
                         Error
                     {:else}
@@ -344,58 +309,6 @@
                                     {/each}
                                 </div>
                             {/if}
-                        </div>
-                    </div>
-
-                {:else if phase === "installing"}
-                    <!-- Install progress -->
-                    <div class="flex flex-col items-center gap-6 py-8">
-                        <div class="flex size-16 items-center justify-center rounded-full bg-primary/10">
-                            <DownloadIcon class="size-8 animate-bounce text-primary" />
-                        </div>
-                        <div class="text-center">
-                            <p class="font-medium">Downloading model...</p>
-                            <p class="mt-1 text-sm text-muted-foreground">
-                                This may take several minutes depending on file size.
-                            </p>
-                        </div>
-
-                        <!-- Progress bar -->
-                        <div class="w-full">
-                            <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
-                                <div
-                                    class="h-full animate-pulse rounded-full bg-primary"
-                                    style="width: 60%"
-                                ></div>
-                            </div>
-                        </div>
-
-                        <p class="text-xs text-muted-foreground">
-                            You can safely close this panel — the download will continue in the background.
-                        </p>
-                    </div>
-
-                {:else if phase === "success"}
-                    <!-- Success -->
-                    <div class="flex flex-col items-center gap-4 py-8">
-                        <div class="flex size-16 items-center justify-center rounded-full bg-emerald-500/10">
-                            <CheckCircle2Icon class="size-8 text-emerald-500" />
-                        </div>
-                        <div class="text-center">
-                            <p class="font-medium">Install Complete</p>
-                            <p class="mt-1 text-sm text-muted-foreground">
-                                The model has been installed and is ready to activate.
-                            </p>
-                        </div>
-                        <div class="flex gap-2">
-                            <Button variant="outline" onclick={handleClose}>
-                                Close
-                            </Button>
-                            <Button onclick={goToModels}>
-                                <CuboidIcon class="size-4" />
-                                Go to Models
-                                <ArrowRightIcon class="size-4" />
-                            </Button>
                         </div>
                     </div>
 
