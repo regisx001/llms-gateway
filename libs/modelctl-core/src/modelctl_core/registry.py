@@ -33,7 +33,8 @@ def _find_registry_root() -> Path:
 
     # Fallback: assume we're in a standard monorepo layout
     # libs/modelctl-core/src/modelctl_core/registry.py → root is 4 levels up
-    fallback = Path(__file__).resolve().parent.parent.parent.parent.parent / "registry"
+    fallback = Path(__file__).resolve(
+    ).parent.parent.parent.parent.parent / "registry"
     return fallback
 
 
@@ -58,7 +59,8 @@ def _find_storage_root() -> Path:
             break
         current = current.parent
 
-    fallback = Path(__file__).resolve().parent.parent.parent.parent.parent / "storage"
+    fallback = Path(__file__).resolve(
+    ).parent.parent.parent.parent.parent / "storage"
     return fallback
 
 
@@ -196,15 +198,19 @@ def load_active() -> dict:
 
 def set_active(model_id: str, type_: str):
     data = load_active()
-    data["active"] = [e for e in data.get(
-        "active", []) if e.get("type") != type_]
-    data["active"].append({
+    # Collect ALL displaced model IDs — only one model can be active at a time
+    displaced = [e["model_id"] for e in data.get(
+        "active", []) if e.get("model_id") != model_id]
+    data["active"] = [{
         "model_id": model_id,
         "type": type_,
         "activated_at": __import__("datetime").datetime.now(
             __import__("datetime").timezone.utc).isoformat(),
-    })
+    }]
     _save(ACTIVE_PATH, data)
+    # Update all displaced models' status back to "installed"
+    for displaced_id in displaced:
+        update_model(displaced_id, status="installed")
 
 
 def clear_active(model_id: str):
@@ -212,6 +218,7 @@ def clear_active(model_id: str):
     data["active"] = [e for e in data.get(
         "active", []) if e.get("model_id") != model_id]
     _save(ACTIVE_PATH, data)
+    update_model(model_id, status="installed")
 
 
 # ── storage paths ─────────────────────────────────────────────────────

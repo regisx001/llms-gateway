@@ -66,12 +66,17 @@ class SystemService:
 
     def reload(self) -> dict:
         """Signal llama-server to reload (SIGTERM the server process)."""
-        try:
-            pid_file = Path("/tmp/llama-server.pid")
-            if pid_file.exists():
-                pid = int(pid_file.read_text().strip())
-                subprocess.run(["kill", "-TERM", str(pid)], check=False)
-                return {"status": "reload_sent", "pid": pid}
-            return {"status": "no_pid_file", "detail": "llama-server PID file not found"}
-        except (ValueError, OSError) as e:
-            return {"status": "error", "detail": str(e)}
+        return reload_llama_server()
+
+
+def reload_llama_server() -> dict:
+    """Standalone helper — signal llama-server to reload (SIGTERM)."""
+    try:
+        pid_file = Path("/tmp/llama-server.pid")
+        if pid_file.exists():
+            pid = int(pid_file.read_text().strip())
+            subprocess.run(["kill", "-TERM", str(pid)], check=False)
+            return {"status": "reload_sent", "pid": pid}
+        return {"status": "no_pid_file", "detail": "llama-server PID file not found"}
+    except (ValueError, OSError) as e:
+        return {"status": "error", "detail": str(e)}

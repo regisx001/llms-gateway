@@ -11,6 +11,7 @@ from modelctl_core import registry
 from modelctl_core.models import Model, Artifact, Download
 from modelctl_core import huggingface as hf
 from modelctl_core import validator
+from .system_service import reload_llama_server
 
 
 # ── domain exceptions ────────────────────────────────────────────────
@@ -243,6 +244,9 @@ class ModelService:
         symlink.symlink_to(relative_target)
 
         registry.set_active(model_id, m.type)
+        registry.update_model(model_id, status="active")
+
+        reload_llama_server()
 
         return self.get_model(model_id)
 
@@ -256,5 +260,7 @@ class ModelService:
         symlink = registry.STORAGE_DIR / f"{m.id}.gguf"
         if symlink.is_symlink() or symlink.exists():
             symlink.unlink()
+
+        reload_llama_server()
 
         return self.get_model(model_id)

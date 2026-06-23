@@ -43,6 +43,7 @@
             }
             models = modelData.models.map((m: any) => ({
                 ...m,
+                status: activeModelId === m.id ? "active" : m.status,
                 size: sizeStr(
                     m.artifacts?.reduce(
                         (a: number, art: any) => a + (art.size ?? 0),

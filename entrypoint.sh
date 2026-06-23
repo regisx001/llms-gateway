@@ -31,7 +31,7 @@ start_llama_server() {
         echo "No active model symlink found in /models/"
     fi
 
-    $LLAMA_SERVER --host 0.0.0.0 --port 8080 $model_flag "$@" &
+    $LLAMA_SERVER $model_flag "$@" &
     PID=$!
     echo "$PID" > $LLAMA_PID_FILE
     wait $PID
