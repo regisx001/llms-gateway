@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import { config } from "$lib/config";
     import * as Card from "$lib/components/ui/card";
     import * as Table from "$lib/components/ui/table";
@@ -7,15 +7,26 @@
     import { Button } from "$lib/components/ui/button";
     import { Skeleton } from "$lib/components/ui/skeleton";
     import { Spinner } from "$lib/components/ui/spinner";
+    import { Separator } from "$lib/components/ui/separator";
     import CuboidIcon from "@lucide/svelte/icons/cuboid";
     import PlayIcon from "@lucide/svelte/icons/play";
     import SquareIcon from "@lucide/svelte/icons/square";
     import Trash2Icon from "@lucide/svelte/icons/trash-2";
+    import SearchIcon from "@lucide/svelte/icons/search";
+    import { goto } from "$app/navigation";
 
     let models = $state<any[]>([]);
     let activeModelId = $state<string | null>(null);
     let loading = $state(true);
     let error = $state<string | null>(null);
+    let polling = $state(false);
+    let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
+    let downloadProgress = $state<
+        Map<
+            string,
+            { progressPct: number; downloadedBytes: number; totalBytes: number }
+        >
+    >(new Map());
 
     function sizeStr(bytes: number): string {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -28,7 +39,6 @@
     }
 
     async function loadModels() {
-        loading = true;
         error = null;
         try {
             const [modelRes, infoRes] = await Promise.all([
@@ -51,10 +61,60 @@
                     ) ?? 0,
                 ),
             }));
+
+            // Fetch progress for downloading models
+            const downloadingModels = models.filter(
+                (m: any) => m.status === "downloading",
+            );
+            if (downloadingModels.length > 0) {
+                const progressResults = await Promise.allSettled(
+                    downloadingModels.map(async (m: any) => {
+                        const res = await fetch(
+                            `${config.apiBase}/api/v1/models/${m.id}/progress`,
+                        );
+                        if (!res.ok) return null;
+                        return { id: m.id, ...(await res.json()) };
+                    }),
+                );
+                const newProgress = new Map(downloadProgress);
+                for (const r of progressResults) {
+                    if (r.status === "fulfilled" && r.value) {
+                        newProgress.set(r.value.id, {
+                            progressPct: r.value.progress_pct,
+                            downloadedBytes: r.value.downloaded_bytes,
+                            totalBytes: r.value.total_bytes,
+                        });
+                    }
+                }
+                downloadProgress = newProgress;
+            }
+
+            // Start polling if any models are downloading
+            const hasDownloading = models.some(
+                (m: any) => m.status === "downloading",
+            );
+            if (hasDownloading && !polling) {
+                startPolling();
+            } else if (!hasDownloading && polling) {
+                stopPolling();
+            }
         } catch (e) {
             error = e instanceof Error ? e.message : "Failed to load models";
         } finally {
             loading = false;
+        }
+    }
+
+    function startPolling() {
+        polling = true;
+        pollInterval = setInterval(loadModels, 2000);
+    }
+
+    function stopPolling() {
+        polling = false;
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
         }
     }
 
@@ -63,7 +123,13 @@
         await loadModels();
     }
 
-    onMount(loadModels);
+    onMount(() => {
+        loadModels();
+    });
+
+    onDestroy(() => {
+        stopPolling();
+    });
 </script>
 
 <svelte:head>
@@ -78,7 +144,15 @@
                 Manage installed models in the registry.
             </p>
         </div>
-        <Button variant="outline" onclick={loadModels}>Refresh</Button>
+        <div class="flex items-center gap-2">
+            {#if polling}
+                <Badge variant="outline" class="gap-1">
+                    <Spinner class="size-3" />
+                    Updating...
+                </Badge>
+            {/if}
+            <Button variant="outline" onclick={loadModels}>Refresh</Button>
+        </div>
     </div>
 
     {#if loading}
@@ -104,6 +178,15 @@
                     Go to the Search page to find and install models from
                     HuggingFace.
                 </p>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="mt-2"
+                    onclick={() => goto("/search")}
+                >
+                    <SearchIcon class="size-3.5" />
+                    Search Models
+                </Button>
             </Card.Content>
         </Card.Root>
     {:else}
@@ -141,10 +224,35 @@
                                     {:else if m.status === "active"}
                                         <Badge>Active</Badge>
                                     {:else if m.status === "downloading"}
-                                        <Badge variant="outline" class="gap-1">
-                                            <Spinner class="size-3" />
-                                            Downloading
-                                        </Badge>
+                                        {@const prog = downloadProgress.get(
+                                            m.id,
+                                        )}
+                                        <div class="flex flex-col gap-1">
+                                            <Badge
+                                                variant="outline"
+                                                class="gap-1"
+                                            >
+                                                <Spinner class="size-3" />
+                                                Downloading
+                                            </Badge>
+                                            {#if prog}
+                                                <div class="w-24">
+                                                    <div
+                                                        class="mb-0.5 text-[10px] tabular-nums text-muted-foreground"
+                                                    >
+                                                        {prog.progressPct}%
+                                                    </div>
+                                                    <div
+                                                        class="h-1 w-full overflow-hidden rounded-full bg-muted"
+                                                    >
+                                                        <div
+                                                            class="h-full rounded-full bg-primary transition-all duration-500"
+                                                            style="width: {prog.progressPct}%"
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            {/if}
+                                        </div>
                                     {:else if m.status === "error"}
                                         <Badge variant="destructive"
                                             >Error</Badge
@@ -183,16 +291,18 @@
                                                 Stop
                                             </Button>
                                         {/if}
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onclick={() =>
-                                                postAction(
-                                                    `/api/v1/models/${m.id}/remove`,
-                                                )}
-                                        >
-                                            <Trash2Icon class="size-3.5" />
-                                        </Button>
+                                        {#if m.status !== "downloading"}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onclick={() =>
+                                                    postAction(
+                                                        `/api/v1/models/${m.id}/remove`,
+                                                    )}
+                                            >
+                                                <Trash2Icon class="size-3.5" />
+                                            </Button>
+                                        {/if}
                                     </div>
                                 </Table.Cell>
                             </Table.Row>
@@ -201,5 +311,23 @@
                 </Table.Root>
             </Card.Content>
         </Card.Root>
+
+        {#if models.some((m: any) => m.installed_at)}
+            <Separator />
+            <p class="text-xs text-muted-foreground">
+                {#each models.filter((m: any) => m.installed_at) as m}
+                    {#if m.installed_at}
+                        <span>
+                            {m.name} installed {new Date(
+                                m.installed_at,
+                            ).toLocaleDateString()}
+                            {#if m !== models[models.length - 1]}
+                                &middot;
+                            {/if}
+                        </span>
+                    {/if}
+                {/each}
+            </p>
+        {/if}
     {/if}
 </div>

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from modelctl_api.dependencies import get_model_service
 from modelctl_api.models.model import (
+    DownloadProgressResponse,
     InstallRequest,
     ModelListResponse,
     ModelResponse,
@@ -75,3 +76,17 @@ async def deactivate_model(
 ):
     """Deactivate a model — remove symlink and clear active state."""
     return svc.deactivate_model(model_id)
+
+
+@router.get("/models/{model_id}/progress", response_model=DownloadProgressResponse)
+async def get_download_progress(
+    model_id: str,
+    svc: ModelService = Depends(get_model_service),
+):
+    """Get download progress for a model being installed."""
+    from fastapi import HTTPException
+    progress = svc.get_download_progress(model_id)
+    if progress is None:
+        raise HTTPException(
+            status_code=404, detail=f"Model not found: {model_id}")
+    return progress
