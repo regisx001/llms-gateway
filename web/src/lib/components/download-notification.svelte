@@ -22,7 +22,8 @@
             <div
                 class={cn(
                     "rounded-lg border bg-card p-3 shadow-lg transition-all",
-                    (d.status === "installed" || d.status === "active") && "border-emerald-500/30",
+                    (d.status === "installed" || d.status === "active") &&
+                        "border-emerald-500/30",
                     d.status === "error" && "border-destructive/30",
                 )}
             >
@@ -32,11 +33,17 @@
                             {#if d.status === "downloading"}
                                 <Spinner class="mr-1 inline size-3" />
                             {:else if d.status === "installed" || d.status === "active"}
-                                <CheckCircle2Icon class="mr-1 inline size-3.5 text-emerald-500" />
+                                <CheckCircle2Icon
+                                    class="mr-1 inline size-3.5 text-emerald-500"
+                                />
                             {:else if d.status === "error"}
-                                <AlertCircleIcon class="mr-1 inline size-3.5 text-destructive" />
+                                <AlertCircleIcon
+                                    class="mr-1 inline size-3.5 text-destructive"
+                                />
                             {:else}
-                                <DownloadIcon class="mr-1 inline size-3.5 text-primary" />
+                                <DownloadIcon
+                                    class="mr-1 inline size-3.5 text-primary"
+                                />
                             {/if}
                             {d.filename || d.repoId}
                         </p>
@@ -55,7 +62,9 @@
                 <!-- Progress bar -->
                 {#if d.status === "downloading"}
                     <div class="mt-2">
-                        <div class="mb-1 flex justify-between text-xs text-muted-foreground">
+                        <div
+                            class="mb-1 flex justify-between text-xs text-muted-foreground"
+                        >
                             <span>{d.progressPct}%</span>
                             <span>
                                 {downloadFormatSize(d.downloadedBytes)}
@@ -64,7 +73,9 @@
                                 {/if}
                             </span>
                         </div>
-                        <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                            class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                        >
                             <div
                                 class="h-full rounded-full bg-primary transition-all duration-500"
                                 style="width: {d.progressPct}%"

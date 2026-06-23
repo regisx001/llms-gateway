@@ -28,10 +28,7 @@
         total_files: number;
     }
 
-    type Phase =
-        | "loading"
-        | "inspect"
-        | "error";
+    type Phase = "loading" | "inspect" | "error";
 
     let {
         open = $bindable(false),
@@ -75,7 +72,9 @@
         return m !== null;
     }
 
-    function typeBadgeVariant(type: string): "default" | "secondary" | "outline" | "destructive" {
+    function typeBadgeVariant(
+        type: string,
+    ): "default" | "secondary" | "outline" | "destructive" {
         switch (type) {
             case "chat":
                 return "default";
@@ -101,13 +100,16 @@
                 `${config.apiBase}/api/v1/search/inspect?repo_id=${encodeURIComponent(repoId)}`,
             );
             if (!res.ok) {
-                const body = await res.json().catch(() => ({ detail: res.statusText }));
+                const body = await res
+                    .json()
+                    .catch(() => ({ detail: res.statusText }));
                 throw new Error(body.detail || `HTTP ${res.status}`);
             }
             inspectData = await res.json();
             phase = "inspect";
         } catch (e) {
-            inspectError = e instanceof Error ? e.message : "Failed to inspect repository";
+            inspectError =
+                e instanceof Error ? e.message : "Failed to inspect repository";
             phase = "error";
         }
     }
@@ -119,19 +121,26 @@
 
         try {
             // Fire async install — returns immediately with 202
-            const installRes = await fetch(`${config.apiBase}/api/v1/models/install`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    repo_id: repoId,
-                    filename,
-                    model_type: inspectData?.type ?? undefined,
-                }),
-            });
+            const installRes = await fetch(
+                `${config.apiBase}/api/v1/models/install`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        repo_id: repoId,
+                        filename,
+                        model_type: inspectData?.type ?? undefined,
+                    }),
+                },
+            );
 
             if (!installRes.ok) {
-                const body = await installRes.json().catch(() => ({ detail: installRes.statusText }));
-                throw new Error(body.detail || `Install failed: ${installRes.status}`);
+                const body = await installRes
+                    .json()
+                    .catch(() => ({ detail: installRes.statusText }));
+                throw new Error(
+                    body.detail || `Install failed: ${installRes.status}`,
+                );
             }
 
             const installResult = await installRes.json();
@@ -201,7 +210,6 @@
                             {/each}
                         </div>
                     </div>
-
                 {:else if phase === "inspect" && inspectData}
                     <!-- Repo info -->
                     <div class="flex flex-col gap-4">
@@ -211,15 +219,21 @@
                                 {inspectData.type}
                             </Badge>
                             {#if inspectData.pipeline_tag}
-                                <Badge variant="outline">{inspectData.pipeline_tag}</Badge>
+                                <Badge variant="outline"
+                                    >{inspectData.pipeline_tag}</Badge
+                                >
                             {/if}
                             {#if inspectData.library_name}
-                                <Badge variant="outline">{inspectData.library_name}</Badge>
+                                <Badge variant="outline"
+                                    >{inspectData.library_name}</Badge
+                                >
                             {/if}
                         </div>
 
                         <!-- Stats row -->
-                        <div class="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                        <div
+                            class="flex flex-wrap gap-4 text-sm text-muted-foreground"
+                        >
                             <span class="flex items-center gap-1.5">
                                 <DownloadIcon class="size-3.5" />
                                 {inspectData.downloads.toLocaleString()}
@@ -239,7 +253,9 @@
                         <!-- Description -->
                         {#if inspectData.description}
                             <div class="rounded-lg bg-muted/50 p-3">
-                                <p class="text-sm text-muted-foreground line-clamp-6">
+                                <p
+                                    class="text-sm text-muted-foreground line-clamp-6"
+                                >
                                     {inspectData.description}
                                 </p>
                             </div>
@@ -257,8 +273,12 @@
                             </p>
 
                             {#if inspectData.gguf_files.length === 0}
-                                <div class="flex flex-col items-center gap-2 py-8 text-center">
-                                    <CuboidIcon class="size-8 text-muted-foreground/40" />
+                                <div
+                                    class="flex flex-col items-center gap-2 py-8 text-center"
+                                >
+                                    <CuboidIcon
+                                        class="size-8 text-muted-foreground/40"
+                                    />
                                     <p class="text-sm text-muted-foreground">
                                         No GGUF files found in this repository.
                                     </p>
@@ -266,19 +286,26 @@
                             {:else}
                                 <div class="flex flex-col gap-2">
                                     {#each inspectData.gguf_files as file}
-                                        {@const quant = parseSizeFromFilename(file)}
-                                        {@const recommended = isRecommended(file)}
+                                        {@const quant =
+                                            parseSizeFromFilename(file)}
+                                        {@const recommended =
+                                            isRecommended(file)}
                                         <div
                                             class={cn(
                                                 "flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50",
-                                                recommended && "border-primary/50 bg-primary/5",
+                                                recommended &&
+                                                    "border-primary/50 bg-primary/5",
                                             )}
                                         >
                                             <div class="min-w-0 flex-1">
-                                                <p class="truncate text-sm font-medium">
+                                                <p
+                                                    class="truncate text-sm font-medium"
+                                                >
                                                     {file}
                                                 </p>
-                                                <div class="mt-0.5 flex items-center gap-2">
+                                                <div
+                                                    class="mt-0.5 flex items-center gap-2"
+                                                >
                                                     {#if quant}
                                                         <Badge
                                                             variant="outline"
@@ -298,9 +325,12 @@
                                                 </div>
                                             </div>
                                             <Button
-                                                variant={recommended ? "default" : "outline"}
+                                                variant={recommended
+                                                    ? "default"
+                                                    : "outline"}
                                                 size="sm"
-                                                onclick={() => installFile(file)}
+                                                onclick={() =>
+                                                    installFile(file)}
                                                 class="shrink-0"
                                             >
                                                 Install
@@ -311,17 +341,20 @@
                             {/if}
                         </div>
                     </div>
-
                 {:else if phase === "error"}
                     <!-- Error -->
                     <div class="flex flex-col items-center gap-4 py-8">
-                        <div class="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+                        <div
+                            class="flex size-16 items-center justify-center rounded-full bg-destructive/10"
+                        >
                             <AlertCircleIcon class="size-8 text-destructive" />
                         </div>
                         <div class="text-center">
                             <p class="font-medium">Something went wrong</p>
                             <p class="mt-1 text-sm text-muted-foreground">
-                                {installError || inspectError || "An unexpected error occurred."}
+                                {installError ||
+                                    inspectError ||
+                                    "An unexpected error occurred."}
                             </p>
                         </div>
                         <div class="flex gap-2">
@@ -329,9 +362,7 @@
                                 Close
                             </Button>
                             {#if inspectError}
-                                <Button onclick={loadInspect}>
-                                    Retry
-                                </Button>
+                                <Button onclick={loadInspect}>Retry</Button>
                             {/if}
                         </div>
                     </div>

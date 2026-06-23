@@ -21,7 +21,12 @@
     let error = $state<string | null>(null);
     let polling = $state(false);
     let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
-    let downloadProgress = $state<Map<string, { progressPct: number; downloadedBytes: number; totalBytes: number }>>(new Map());
+    let downloadProgress = $state<
+        Map<
+            string,
+            { progressPct: number; downloadedBytes: number; totalBytes: number }
+        >
+    >(new Map());
 
     function sizeStr(bytes: number): string {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -219,18 +224,27 @@
                                     {:else if m.status === "active"}
                                         <Badge>Active</Badge>
                                     {:else if m.status === "downloading"}
-                                        {@const prog = downloadProgress.get(m.id)}
+                                        {@const prog = downloadProgress.get(
+                                            m.id,
+                                        )}
                                         <div class="flex flex-col gap-1">
-                                            <Badge variant="outline" class="gap-1">
+                                            <Badge
+                                                variant="outline"
+                                                class="gap-1"
+                                            >
                                                 <Spinner class="size-3" />
                                                 Downloading
                                             </Badge>
                                             {#if prog}
                                                 <div class="w-24">
-                                                    <div class="mb-0.5 text-[10px] tabular-nums text-muted-foreground">
+                                                    <div
+                                                        class="mb-0.5 text-[10px] tabular-nums text-muted-foreground"
+                                                    >
                                                         {prog.progressPct}%
                                                     </div>
-                                                    <div class="h-1 w-full overflow-hidden rounded-full bg-muted">
+                                                    <div
+                                                        class="h-1 w-full overflow-hidden rounded-full bg-muted"
+                                                    >
                                                         <div
                                                             class="h-full rounded-full bg-primary transition-all duration-500"
                                                             style="width: {prog.progressPct}%"
@@ -304,7 +318,9 @@
                 {#each models.filter((m: any) => m.installed_at) as m}
                     {#if m.installed_at}
                         <span>
-                            {m.name} installed {new Date(m.installed_at).toLocaleDateString()}
+                            {m.name} installed {new Date(
+                                m.installed_at,
+                            ).toLocaleDateString()}
                             {#if m !== models[models.length - 1]}
                                 &middot;
                             {/if}
