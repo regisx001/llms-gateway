@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -98,16 +99,20 @@ class ModelService:
         filename: str,
         model_type: str | None = None,
     ) -> dict:
-        """Install a model: inspect repo, download file, register in registry."""
+        """Install a model — validate and start background download.
+
+        Returns immediately with the model in 'downloading' status.
+        The actual download runs in a background thread.
+        """
         # Check if already installed
         for m in registry.load_models():
             if m.repo_id == repo_id and any(a.name == filename for a in m.artifacts):
-                if m.status == "installed":
+                if m.status == "installed" or m.status == "active":
                     raise ModelctlError(
                         f"Already installed: {repo_id} / {filename}"
                     )
 
-        # Inspect repo
+        # Inspect repo (synchronous — fast API call)
         info = hf.inspect(repo_id)
         if not info:
             raise ModelctlError(f"Repository not found: {repo_id}")
@@ -117,13 +122,14 @@ class ModelService:
                 f"Available GGUF files: {', '.join(info['gguf_files'])}"
             )
 
-        # Build model object
+        # Build model object and register immediately
         model = hf.build_model_from_repo(
             repo_id, filename, model_type or "", repo_info=info
         )
         model.status = "downloading"
         registry.add_model(model)
 
+        # Prepare storage directory
         storage_dir = registry.resolve_storage(model.type, model.id)
         files_dir = storage_dir / "files"
         if files_dir.exists():
@@ -131,35 +137,69 @@ class ModelService:
             shutil.rmtree(files_dir)
         files_dir.mkdir(parents=True, exist_ok=True)
 
-        # Register download
+        # Register download entry with total size from repo info
         url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
-        dl = Download(url=url, destination=str(
-            files_dir / filename), status="downloading")
+        # Try to find file size from siblings
+        total_size = 0
+        for sib in info.get("siblings", []):
+            if sib.get("rfilename") == filename:
+                total_size = sib.get("size", 0)
+                break
+
+        dl = Download(
+            url=url,
+            destination=str(files_dir / filename),
+            total_bytes=total_size,
+            status="downloading",
+            started_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        )
         registry.add_download(dl)
 
-        # Download with progress
+        # Start background download
+        model_id = model.id
+        thread = threading.Thread(
+            target=self._run_install,
+            args=(model_id, repo_id, filename, files_dir, url, info),
+            daemon=True,
+        )
+        thread.start()
+
+        return self.get_model(model_id)
+
+    def _run_install(
+        self,
+        model_id: str,
+        repo_id: str,
+        filename: str,
+        files_dir: Path,
+        url: str,
+        info: dict,
+    ):
+        """Background thread: download, validate, finalize."""
         last_update = [time.time()]
 
         def on_progress(current: int, total: int):
             now = time.time()
-            if now - last_update[0] > 0.3 or current >= total:
+            if now - last_update[0] > 0.5 or current >= total:
                 last_update[0] = now
                 registry.update_download(
-                    url, downloaded_bytes=current, total_bytes=total)
+                    url, downloaded_bytes=current, total_bytes=max(total, current))
 
         try:
             dest = hf.download_file(
                 repo_id, filename, files_dir, on_progress=on_progress)
         except Exception as e:
             registry.update_download(url, status="failed", error=str(e))
-            registry.update_model(model.id, status="error")
-            raise ModelctlError(f"Download failed: {e}") from e
+            registry.update_model(model_id, status="error")
+            return
 
         # Validate
         issues = validator.validate_file(dest)
         if issues:
-            registry.update_model(model.id, status="error")
-            raise ModelctlError(f"Validation failed: {'; '.join(issues)}")
+            registry.update_model(model_id, status="error")
+            registry.update_download(
+                url, status="failed", error=f"Validation: {'; '.join(issues)}")
+            return
 
         # Finalize
         actual_size = dest.stat().st_size
@@ -173,9 +213,9 @@ class ModelService:
         )
         installed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         registry.update_model(
-            model.id,
+            model_id,
             status="installed",
-            storage_path=f"{model.type}/{model.id}",
+            storage_path=f"{info.get('type', 'experimental')}/{model_id}",
             artifacts=[artifact],
             installed_at=installed_at,
         )
@@ -187,7 +227,44 @@ class ModelService:
             completed_at=installed_at,
         )
 
-        return self.get_model(model.id)
+    def get_download_progress(self, model_id: str) -> dict | None:
+        """Get download progress for a model, or None if not found."""
+        m = registry.find_model(model_id)
+        if not m:
+            return None
+
+        # Find the download entry for this model
+        dls = registry.load_downloads()
+        dl = None
+        for d in dls:
+            # Match by destination containing the model id
+            if model_id in d.destination:
+                dl = d
+                break
+
+        if not dl:
+            return {
+                "model_id": model_id,
+                "status": m.status,
+                "downloaded_bytes": 0,
+                "total_bytes": 0,
+                "progress_pct": 0,
+            }
+
+        progress_pct = 0
+        if dl.total_bytes > 0:
+            progress_pct = round(dl.downloaded_bytes * 100 / dl.total_bytes)
+
+        return {
+            "model_id": model_id,
+            "repo_id": m.repo_id,
+            "filename": m.artifacts[0].name if m.artifacts else "unknown",
+            "status": m.status,
+            "downloaded_bytes": dl.downloaded_bytes,
+            "total_bytes": dl.total_bytes,
+            "progress_pct": progress_pct,
+            "error": dl.error,
+        }
 
     def remove_model(self, model_id: str) -> dict:
         """Remove a model and its files from disk."""

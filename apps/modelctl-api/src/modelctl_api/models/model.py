@@ -39,3 +39,14 @@ class InstallRequest(BaseModel):
     model_type: str | None = Field(
         None, description="Override model type (chat, embedding, reranker, vision, experimental)"
     )
+
+
+class DownloadProgressResponse(BaseModel):
+    model_id: str
+    repo_id: str = ""
+    filename: str = ""
+    status: str
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    progress_pct: int = 0
+    error: str | None = None
