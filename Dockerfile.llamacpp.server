@@ -11,6 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-requests \
     && rm -rf /var/lib/apt/lists/*
 
+# ── Bun (for building the SvelteKit frontend) ─────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
 # Copy and install modelctl-core (lib)
 COPY libs/modelctl-core/ /opt/modelctl-core/
 RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir
@@ -19,8 +28,23 @@ RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir
 COPY apps/modelctl/ /opt/modelctl/
 RUN pip3 install /opt/modelctl --break-system-packages --no-cache-dir
 
-# Copy and install modelctl-api (FastAPI app)
-COPY apps/modelctl-api/ /opt/modelctl-api/
+# ── Copy modelctl-api skeleton so web build has a target directory ───
+#     Placed at /opt/apps/modelctl-api to match the repo-relative path
+#     that the SvelteKit vite config references (../apps/modelctl-api/static).
+COPY apps/modelctl-api/ /opt/apps/modelctl-api/
+
+# ── Build SvelteKit frontend (output → /opt/apps/modelctl-api/static) ─
+COPY web/ /opt/web/
+RUN cd /opt/web \
+    && bun install --frozen-lockfile \
+    && bun run build \
+    && cd / \
+    && rm -rf /opt/web
+
+# ── Move built API tree to final location ─────────────────────────────
+RUN mv /opt/apps/modelctl-api /opt/modelctl-api
+
+# Install modelctl-api (now includes static frontend assets)
 RUN pip3 install /opt/modelctl-api --break-system-packages --no-cache-dir && \
     pip3 install uvicorn --break-system-packages --no-cache-dir
 
