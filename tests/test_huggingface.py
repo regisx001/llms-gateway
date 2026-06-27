@@ -174,3 +174,141 @@ class TestBuildModelFromRepo:
         model = hf.build_model_from_repo("test/Model", "model.gguf", repo_info=info)
         assert model.repo_id == "test/Model"
         mock_get.assert_not_called()
+
+
+# ── edge-case / error-catching tests ───────────────────────────────────
+
+class TestInferTypeEdgeCases:
+    def test_feature_extraction(self):
+        assert hf._infer_type({"pipeline_tag": "feature-extraction"}) == "embedding"
+
+    def test_sentence_similarity(self):
+        assert hf._infer_type({"pipeline_tag": "sentence-similarity"}) == "embedding"
+
+    def test_image_classification(self):
+        assert hf._infer_type({"pipeline_tag": "image-classification"}) == "vision"
+
+    def test_object_detection(self):
+        assert hf._infer_type({"pipeline_tag": "object-detection"}) == "vision"
+
+
+class TestFilterGGUFEdgeCases:
+    def test_f16_and_f32_sort_after_q(self):
+        """f16 and f32 (no Q number) sort after all Q-prefixed files."""
+        siblings = [
+            {"rfilename": "model-f32.gguf"},
+            {"rfilename": "model-f16.gguf"},
+            {"rfilename": "model-Q4_K_M.gguf"},
+        ]
+        result = hf._filter_gguf_files(siblings)
+        assert result[0] == "model-Q4_K_M.gguf"
+
+    def test_mixed_case_extensions(self):
+        """Only lowercase .gguf matches; .GGUF is filtered out (case-sensitive)."""
+        siblings = [
+            {"rfilename": "model.GGUF"},
+            {"rfilename": "model.gguf"},
+            {"rfilename": "other.txt"},
+        ]
+        result = hf._filter_gguf_files(siblings)
+        assert result == ["model.gguf"]  # .GGUF does not match .endswith(".gguf")
+
+
+class TestBuildModelFromRepoEdgeCases:
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_build_model_from_nonexistent_repo_raises(self, mock_get):
+        """When the repo doesn't exist, ValueError is raised."""
+        resp = _mock_response({"error": "Not found"}, status=404)
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "404", response=resp)
+        mock_get.return_value = resp
+        with pytest.raises(ValueError, match="not found"):
+            hf.build_model_from_repo("test/nonexistent", "model.gguf")
+
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_build_model_no_gguf_siblings(self, mock_get):
+        """Repo with no GGUF siblings still builds correctly."""
+        mock_get.return_value = _mock_response({
+            "modelId": "test/TokenizerRepo",
+            "pipeline_tag": "feature-extraction",
+            "downloads": 0,
+            "likes": 0,
+            "library_name": "tokenizers",
+            "cardData": {},
+            "siblings": [
+                {"rfilename": "tokenizer.json"},
+                {"rfilename": "config.json"},
+            ],
+        })
+        model = hf.build_model_from_repo("test/TokenizerRepo", "tokenizer.json")
+        assert model.repo_id == "test/TokenizerRepo"
+        assert model.artifacts[0].name == "tokenizer.json"
+
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_build_model_with_explicit_type(self, mock_get):
+        """Providing an explicit model_type overrides inference."""
+        mock_get.return_value = _mock_response({
+            "modelId": "test/SomeRepo",
+            "pipeline_tag": "text-generation",
+            "downloads": 0,
+            "likes": 0,
+            "library_name": "",
+            "cardData": {},
+            "siblings": [{"rfilename": "model.gguf"}],
+        })
+        model = hf.build_model_from_repo(
+            "test/SomeRepo", "model.gguf", model_type="experimental")
+        assert model.type == "experimental"
+
+
+class TestSearchEdgeCases:
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_search_with_custom_limit(self, mock_get):
+        """Search should pass limit parameter."""
+        mock_get.return_value = _mock_response([])
+        hf.search("query", limit=5)
+        url = mock_get.call_args[0][0]
+        assert "limit=5" in url
+
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_search_handles_http_error(self, mock_get):
+        """Search should propagate HTTP errors."""
+        resp = _mock_response({}, status=500)
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "500", response=resp)
+        mock_get.return_value = resp
+        with pytest.raises(requests.exceptions.HTTPError):
+            hf.search("query")
+
+
+class TestInspectEdgeCases:
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_inspect_no_siblings(self, mock_get):
+        """Repo with no siblings key should not crash."""
+        mock_get.return_value = _mock_response({
+            "modelId": "test/BareRepo",
+            "pipeline_tag": "text-generation",
+            "downloads": 0,
+            "likes": 0,
+            "library_name": "",
+            "cardData": {},
+        })
+        info = hf.inspect("test/BareRepo")
+        assert info is not None
+        assert info["gguf_files"] == []
+        assert info["all_files"] == []
+
+    @patch("modelctl_core.huggingface.requests.get")
+    def test_inspect_no_card_data(self, mock_get):
+        """Repo with no cardData should not crash."""
+        mock_get.return_value = _mock_response({
+            "modelId": "test/Bare",
+            "pipeline_tag": "text-generation",
+            "downloads": 0,
+            "likes": 0,
+            "library_name": "",
+            "siblings": [],
+        })
+        info = hf.inspect("test/Bare")
+        assert info["license"] == ""
+        assert info["description"] == ""

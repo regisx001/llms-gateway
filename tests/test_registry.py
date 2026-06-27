@@ -140,3 +140,126 @@ class TestResolveStorage:
         path = reg.resolve_storage("chat", "my-model")
         assert path.name == "my-model"
         assert path.parent.name == "chat"
+
+
+# ── edge-case / error-catching tests ───────────────────────────────────
+
+class TestRegistryEdgeCases:
+    def test_is_registered_with_no_models(self, tmp_registry_backend):
+        """is_registered should return False cleanly when no models exist."""
+        assert reg.is_registered("any/repo", "any.gguf") is False
+
+    def test_update_model_multiple_fields(self, tmp_registry_backend):
+        """Updating multiple fields at once should all stick."""
+        reg.add_model(Model(id="m", name="Old", status="registered",
+                            metadata={"key": "val"}))
+        reg.update_model("m", name="New", status="installed",
+                         metadata={"key": "updated"})
+        m = reg.find_model("m")
+        assert m.name == "New"
+        assert m.status == "installed"
+        assert m.metadata == {"key": "updated"}
+
+    def test_find_model_with_cached_list(self, tmp_registry_backend):
+        """find_model with a pre-fetched models list should not hit disk."""
+        m = Model(id="x", name="X")
+        reg.add_model(m)
+        models = reg.load_models()
+        # Add another model to disk but NOT to the cached list
+        reg.add_model(Model(id="y", name="Y"))
+        # find with cached list should only see x
+        found = reg.find_model("x", models=models)
+        assert found is not None
+        found_y = reg.find_model("y", models=models)
+        assert found_y is None  # y is on disk but not in the cached list
+
+    def test_remove_then_re_add(self, tmp_registry_backend):
+        """Removing a model then adding it back should work."""
+        m = Model(id="z", name="Z")
+        reg.add_model(m)
+        assert reg.remove_model("z")
+        reg.add_model(Model(id="z", name="Z-V2"))
+        assert reg.find_model("z").name == "Z-V2"
+
+    def test_save_models_overwrites_existing(self, tmp_registry_backend):
+        """Saving a models list replaces whatever was there before."""
+        reg.add_model(Model(id="a"))
+        reg.add_model(Model(id="b"))
+        reg.save_models([Model(id="c")])
+        models = reg.load_models()
+        assert len(models) == 1
+        assert models[0].id == "c"
+
+    def test_update_download_nonexistent_url(self, tmp_registry_backend):
+        """update_download on a URL not in the list should not crash."""
+        reg.update_download("http://nonexistent.com/x.gguf", status="completed")
+        assert reg.load_downloads() == []
+
+    def test_multiple_downloads_persistence(self, tmp_registry_backend):
+        """Multiple downloads should all be saved and reloaded."""
+        d1 = Download(url="http://a.com/1.gguf", destination="/tmp/1.gguf")
+        d2 = Download(url="http://a.com/2.gguf", destination="/tmp/2.gguf")
+        reg.add_download(d1)
+        reg.add_download(d2)
+        dls = reg.load_downloads()
+        assert len(dls) == 2
+        urls = {d.url for d in dls}
+        assert "http://a.com/1.gguf" in urls
+        assert "http://a.com/2.gguf" in urls
+
+    def test_save_downloads_overwrites(self, tmp_registry_backend):
+        """Saving downloads directly replaces the list."""
+        reg.add_download(Download(url="http://a.com/old.gguf",
+                                   destination="/tmp/old.gguf"))
+        reg.save_downloads([Download(url="http://a.com/new.gguf",
+                                      destination="/tmp/new.gguf")])
+        dls = reg.load_downloads()
+        assert len(dls) == 1
+        assert dls[0].url == "http://a.com/new.gguf"
+
+    def test_set_active_displaces_status(self, tmp_registry_backend):
+        """When a same-type model is displaced, its status becomes 'installed'.
+        The newly-activated model keeps its original status."""
+        reg.add_model(Model(id="old", status="active"))
+        reg.add_model(Model(id="new", status="installed"))
+
+        reg.set_active("old", "chat")
+        # Now activate 'new' — 'old' should be displaced to 'installed'
+        reg.set_active("new", "chat")
+
+        old = reg.find_model("old")
+        assert old.status == "installed"
+        new = reg.find_model("new")
+        assert new.status == "installed"  # set_active doesn't change new model's status
+
+    def test_set_active_same_model_twice(self, tmp_registry_backend):
+        """Setting the same model active twice should not duplicate entries."""
+        reg.add_model(Model(id="m", status="installed"))
+        reg.set_active("m", "chat")
+        reg.set_active("m", "chat")
+        data = reg.load_active()
+        assert len(data["active"]) == 1
+
+    def test_clear_active_nonexistent_model(self, tmp_registry_backend):
+        """clear_active on a model not in active list should not crash."""
+        reg.clear_active("nonexistent")
+        assert reg.load_active() == {"active": []}
+
+    def test_model_with_installed_at_field(self, tmp_registry_backend):
+        """Models with installed_at should persist correctly."""
+        m = Model(id="timed", installed_at="2024-06-01T12:00:00+00:00")
+        reg.add_model(m)
+        found = reg.find_model("timed")
+        assert found.installed_at == "2024-06-01T12:00:00+00:00"
+
+    def test_add_model_with_full_metadata(self, tmp_registry_backend):
+        """Model with rich metadata should round-trip cleanly."""
+        m = Model(id="rich", name="Rich Model", type="embedding",
+                  metadata={"pipeline_tag": "sentence-similarity",
+                            "library_name": "sentence-transformers",
+                            "tags": ["embedding", "gguf"]})
+        reg.add_model(m)
+        found = reg.find_model("rich")
+        assert found.metadata["pipeline_tag"] == "sentence-similarity"
+        assert found.metadata["library_name"] == "sentence-transformers"
+        assert found.type == "embedding"
