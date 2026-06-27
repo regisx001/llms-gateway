@@ -1,8 +1,12 @@
-"""Registry — JSON file persistence for models, downloads, and active state."""
+"""Registry — persistence abstraction for models, downloads, and active state.
+
+This module acts as a thin proxy over a pluggable `RegistryStore` backend.
+Set ``MODELCTL_STORE_BACKEND`` to ``"sqlite"`` to use SQLite instead of the
+default JSON-file store.
+"""
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Optional
@@ -10,218 +14,90 @@ from typing import Optional
 from .models import Model, Download
 
 
-def _find_registry_root() -> Path:
-    """Find registry/ directory by walking up from this file or using env."""
-    env_root = os.environ.get("MODELCTL_REGISTRY_DIR")
-    if env_root:
-        return Path(env_root)
+# ── backend selection ─────────────────────────────────────────────────
+# The store singleton is created at import time based on env var.
+# Switching backends at runtime is not supported (restart required).
 
-    # Container path (mounted volume)
-    container_path = Path("/opt/model-manager/registry")
-    if container_path.exists():
-        return container_path
+_BACKEND = os.environ.get("MODELCTL_STORE_BACKEND", "json").strip().lower()
 
-    # Walk up from this source file to find workspace root with registry/
-    current = Path(__file__).resolve().parent
-    for _ in range(8):
-        candidate = current / "registry"
-        if candidate.is_dir():
-            return candidate
-        if current.parent == current:
-            break
-        current = current.parent
+if _BACKEND == "sqlite":
+    from .sqlite_store import SqliteStore as _StoreClass  # noqa: E402
+else:
+    from .json_store import JsonStore as _StoreClass  # noqa: E402
 
-    # Fallback: assume we're in a standard monorepo layout
-    # libs/modelctl-core/src/modelctl_core/registry.py → root is 4 levels up
-    fallback = Path(__file__).resolve(
-    ).parent.parent.parent.parent.parent / "registry"
-    return fallback
+_store = _StoreClass()
 
-
-def _find_storage_root() -> Path:
-    """Find storage/ directory."""
-    env_root = os.environ.get("MODELCTL_STORAGE_DIR")
-    if env_root:
-        return Path(env_root)
-
-    # Container path
-    container_path = Path("/models")
-    if container_path.exists():
-        return container_path
-
-    # Walk up from source to find workspace root with storage/
-    current = Path(__file__).resolve().parent
-    for _ in range(8):
-        candidate = current / "storage"
-        if candidate.is_dir():
-            return candidate
-        if current.parent == current:
-            break
-        current = current.parent
-
-    fallback = Path(__file__).resolve(
-    ).parent.parent.parent.parent.parent / "storage"
-    return fallback
-
-
-REGISTRY_DIR = _find_registry_root()
-STORAGE_DIR = _find_storage_root()
-
-MODELS_PATH = REGISTRY_DIR / "models.json"
-DOWNLOADS_PATH = REGISTRY_DIR / "downloads.json"
-ACTIVE_PATH = REGISTRY_DIR / "active.json"
-
-
-# ── auto-create registry files on import ───────────────────────────
-
-def _ensure(path: Path, default):
-    if not path.exists():
-        REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(default, f, indent=2)
-            f.write("\n")
-
-
-_ensure(MODELS_PATH, {"models": []})
-_ensure(DOWNLOADS_PATH, {"downloads": []})
-_ensure(ACTIVE_PATH, {"active": []})
-
-
-# ── helpers ──────────────────────────────────────────────────────────
-
-def _load(path: Path) -> list | dict:
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return [] if path.name != "active.json" else {"active": []}
-
-
-def _save(path: Path, data):
-    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
+# Re-export directories for backward-compatibility
+REGISTRY_DIR: Path = _store.registry_dir
+STORAGE_DIR: Path = _store.storage_dir
+MODELS_PATH: Path = REGISTRY_DIR / "models.json"
+DOWNLOADS_PATH: Path = REGISTRY_DIR / "downloads.json"
+ACTIVE_PATH: Path = REGISTRY_DIR / "active.json"
 
 
 # ── models ────────────────────────────────────────────────────────────
 
 def load_models() -> list[Model]:
-    raw = _load(MODELS_PATH)
-    if isinstance(raw, dict):
-        raw = raw.get("models", [])
-    return [Model(**m) if not isinstance(m, Model) else m for m in raw]
+    return _store.load_models()
 
 
-def save_models(models: list[Model]):
-    _save(MODELS_PATH, {"models": [m.to_dict() for m in models]})
+def save_models(models: list[Model]) -> None:
+    _store.save_models(models)
 
 
 def find_model(model_id: str, models: Optional[list[Model]] = None) -> Optional[Model]:
-    if models is None:
-        models = load_models()
-    for m in models:
-        if m.id == model_id:
-            return m
-    return None
+    return _store.find_model(model_id, models)
 
 
 def update_model(model_id: str, **kwargs) -> bool:
-    models = load_models()
-    for m in models:
-        if m.id == model_id:
-            for k, v in kwargs.items():
-                setattr(m, k, v)
-            save_models(models)
-            return True
-    return False
+    return _store.update_model(model_id, **kwargs)
 
 
 def is_registered(repo_id: str, artifact_name: str) -> bool:
-    for m in load_models():
-        if m.repo_id == repo_id:
-            for a in m.artifacts:
-                if a.name == artifact_name:
-                    return True
-    return False
+    return _store.is_registered(repo_id, artifact_name)
 
 
-def add_model(model: Model):
-    models = load_models()
-    models.append(model)
-    save_models(models)
+def add_model(model: Model) -> None:
+    _store.add_model(model)
 
 
 def remove_model(model_id: str) -> bool:
-    models = load_models()
-    filtered = [m for m in models if m.id != model_id]
-    if len(filtered) == len(models):
-        return False
-    save_models(filtered)
-    return True
+    return _store.remove_model(model_id)
 
 
 # ── downloads ─────────────────────────────────────────────────────────
 
 def load_downloads() -> list[Download]:
-    raw = _load(DOWNLOADS_PATH)
-    if isinstance(raw, dict):
-        raw = raw.get("downloads", [])
-    return [Download(**d) for d in raw]
+    return _store.load_downloads()
 
 
-def save_downloads(downloads: list[Download]):
-    _save(DOWNLOADS_PATH, {"downloads": [d.to_dict() for d in downloads]})
+def save_downloads(downloads: list[Download]) -> None:
+    _store.save_downloads(downloads)
 
 
-def add_download(download: Download):
-    dls = load_downloads()
-    dls.append(download)
-    save_downloads(dls)
+def add_download(download: Download) -> None:
+    _store.add_download(download)
 
 
-def update_download(url: str, **kwargs):
-    dls = load_downloads()
-    for d in dls:
-        if d.url == url:
-            for k, v in kwargs.items():
-                setattr(d, k, v)
-            break
-    save_downloads(dls)
+def update_download(url: str, **kwargs) -> None:
+    _store.update_download(url, **kwargs)
 
 
 # ── active ────────────────────────────────────────────────────────────
 
 def load_active() -> dict:
-    return _load(ACTIVE_PATH)
+    return _store.load_active()
 
 
-def set_active(model_id: str, type_: str):
-    data = load_active()
-    # Collect ALL displaced model IDs — only one model can be active at a time
-    displaced = [e["model_id"] for e in data.get(
-        "active", []) if e.get("model_id") != model_id]
-    data["active"] = [{
-        "model_id": model_id,
-        "type": type_,
-        "activated_at": __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc).isoformat(),
-    }]
-    _save(ACTIVE_PATH, data)
-    # Update all displaced models' status back to "installed"
-    for displaced_id in displaced:
-        update_model(displaced_id, status="installed")
+def set_active(model_id: str, type_: str) -> None:
+    _store.set_active(model_id, type_)
 
 
-def clear_active(model_id: str):
-    data = load_active()
-    data["active"] = [e for e in data.get(
-        "active", []) if e.get("model_id") != model_id]
-    _save(ACTIVE_PATH, data)
-    update_model(model_id, status="installed")
+def clear_active(model_id: str) -> None:
+    _store.clear_active(model_id)
 
 
 # ── storage paths ─────────────────────────────────────────────────────
 
 def resolve_storage(model_type: str, model_id: str) -> Path:
-    return STORAGE_DIR / model_type / model_id
+    return _store.resolve_storage(model_type, model_id)

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "modelctl-api"
 version = "0.1.0"
@@ -20,5 +24,5 @@ test = [
 [tool.uv.sources]
 modelctl-core = { workspace = true }
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/modelctl_api"]
