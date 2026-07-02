@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modelctl-orch"
+version = "0.1.0"
+description = "Orchestration library for modelctl — container lifecycle, port allocation, Docker management"
+requires-python = ">=3.10"
+dependencies = [
+    "modelctl-core",
+    "docker>=7.0",
+    "httpx>=0.27",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+]
+
+[tool.uv.sources]
+modelctl-core = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/modelctl_orch"]
