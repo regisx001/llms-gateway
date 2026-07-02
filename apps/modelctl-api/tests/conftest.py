@@ -20,12 +20,20 @@ def tmp_registry(monkeypatch) -> Generator[Path, None, None]:
     reg_dir.mkdir(parents=True)
     sto_dir.mkdir(parents=True)
 
+    # Set env vars so any new store instances resolve to the temp dirs
+    monkeypatch.setenv("MODELCTL_REGISTRY_DIR", str(reg_dir))
+    monkeypatch.setenv("MODELCTL_STORAGE_DIR", str(sto_dir))
+
     import modelctl_core.registry as reg
     monkeypatch.setattr(reg, "REGISTRY_DIR", reg_dir)
     monkeypatch.setattr(reg, "STORAGE_DIR", sto_dir)
     monkeypatch.setattr(reg, "MODELS_PATH", reg_dir / "models.json")
     monkeypatch.setattr(reg, "DOWNLOADS_PATH", reg_dir / "downloads.json")
     monkeypatch.setattr(reg, "ACTIVE_PATH", reg_dir / "active.json")
+
+    # Replace the _store singleton so all registry functions use the temp dir
+    from modelctl_core.json_store import JsonStore
+    monkeypatch.setattr(reg, "_store", JsonStore(registry_dir=reg_dir))
 
     for name, default in [
         ("models.json", {"models": []}),
@@ -43,10 +51,6 @@ def tmp_registry(monkeypatch) -> Generator[Path, None, None]:
 @pytest.fixture
 def client(tmp_registry, monkeypatch) -> Generator[TestClient, None, None]:
     """FastAPI TestClient with isolated registry."""
-    # Seed env vars so the api uses the temp paths
-    monkeypatch.setenv("MODELCTL_REGISTRY_DIR", str(tmp_registry / "registry"))
-    monkeypatch.setenv("MODELCTL_STORAGE_DIR", str(tmp_registry / "storage"))
-
     from modelctl_api.main import app
     with TestClient(app) as c:
         yield c
