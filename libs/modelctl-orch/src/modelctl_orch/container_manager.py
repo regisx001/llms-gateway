@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 
 # Inference image used for all capabilities
 # Override via the LLAMACPP_IMAGE env var
-CONTAINER_IMAGE = os.environ.get("LLAMACPP_IMAGE", "llamaserver:latest")
+CONTAINER_IMAGE = os.environ.get(
+    "LLAMACPP_IMAGE", "ghcr.io/ggml-org/llama.cpp:server")
 
 # Docker network for inference containers
 NETWORK_NAME = os.environ.get("MODELCTL_NETWORK", "modelctl-net")
@@ -36,6 +37,26 @@ class ContainerManager:
 
     def __init__(self, docker_client: docker.DockerClient | None = None) -> None:
         self._client = docker_client or docker.from_env()
+        self._gpu_available = self._check_gpu_available()
+
+    @staticmethod
+    def _check_gpu_available() -> bool:
+        """Detect whether the Docker host has GPU support (nvidia-container-toolkit)."""
+        try:
+            client = docker.from_env()
+            info = client.info()
+            # Check for NVIDIA GPUs in Docker info
+            runtimes = info.get("Runtimes", {})
+            if "nvidia" in runtimes:
+                return True
+            # Also check via nvidia-smi as a fallback
+            import subprocess
+            result = subprocess.run(
+                ["nvidia-smi"], capture_output=True, timeout=5
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # Network management
@@ -61,6 +82,7 @@ class ContainerManager:
         model_id: str,
         model_path: str,
         port: int,
+        storage_root: str = "",
         profile: ResourceProfile | None = None,
     ) -> ContainerInfo:
         """Start a new inference container for *capability*.
@@ -75,6 +97,9 @@ class ContainerManager:
             Absolute path to the GGUF model file on the host.
         port:
             Host port to bind the container to.
+        storage_root:
+            Host path to the storage root — mounted inside the container so
+            the model can be loaded from its real storage location.
         profile:
             Resource constraints. Falls back to ``DEFAULT_PROFILES[capability]``.
 
@@ -93,14 +118,27 @@ class ContainerManager:
             "modelctl.port": str(port),
         }
 
+        # ── resolve container paths ─────────────────────────────────
+        # Mount the storage root to /storage, then compute the model
+        # path relative to it so llama-server can find the GGUF file.
+        storage_root = storage_root or os.path.dirname(model_path)
+        model_mount_path = os.path.normpath(
+            f"/storage/{os.path.relpath(model_path, storage_root)}"
+        )
+        container_port = 8080
+
         env = {
-            "MODEL_PATH": model_path,
+            "MODEL_PATH": model_mount_path,
             "CAPABILITY": capability,
-            "SERVER_PORT": str(port),
+            "SERVER_PORT": str(container_port),
         }
 
         device_requests: list = []
-        if profile.gpu_count > 0 and profile.gpu_device is not None:
+        if (
+            profile.gpu_count > 0
+            and profile.gpu_device is not None
+            and self._gpu_available
+        ):
             device_requests.append(
                 docker.types.DeviceRequest(
                     device_ids=[profile.gpu_device],
@@ -108,24 +146,33 @@ class ContainerManager:
                     count=profile.gpu_count,
                 )
             )
+        elif profile.gpu_count > 0 and not self._gpu_available:
+            log.warning(
+                "GPU requested but no NVIDIA runtime detected — falling back to CPU"
+            )
 
-        # The base llama.cpp server image listens on 8080 by default.
-        # Map the allocated host port to the container's 8080 so the
-        # health check and inference clients can reach it via host:port.
-        container_port = 8080
+        # ── run llama-server CLI directly ───────────────────────────
+        # Clear the image's entrypoint.sh and invoke llama-server with
+        # the model from its actual storage path.
         container: Container = self._client.containers.run(
             image=CONTAINER_IMAGE,
             name=f"modelctl-{capability}-{model_id.replace('/', '-')}",
             detach=True,
             ports={container_port: port},
             volumes={
-                os.path.dirname(model_path): {
-                    "bind": "/models",
+                storage_root: {
+                    "bind": "/storage",
                     "mode": "ro",
                 },
             },
             environment=env,
-            command=["--host", "0.0.0.0", "--port", str(container_port)],
+            entrypoint=[],
+            command=[
+                "/app/llama-server",
+                "-m", model_mount_path,
+                "--host", "0.0.0.0",
+                "--port", str(container_port),
+            ],
             mem_limit=profile.memory_limit,
             nano_cpus=int(profile.cpu_count * 1e9),
             device_requests=device_requests,

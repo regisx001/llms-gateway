@@ -81,15 +81,21 @@ class TestStart:
         kwargs = mock_docker_client.containers.run.call_args.kwargs
         assert kwargs["ports"] == {8080: 30001}
 
-    def test_start_sets_command(self, mock_docker_client, mock_container):
-        """Should pass --host and --port flags to override default entrypoint."""
+    def test_start_sets_command_and_entrypoint(self, mock_docker_client, mock_container):
+        """Should clear entrypoint and use llama-server CLI directly."""
         mock_docker_client.containers.run.return_value = mock_container
         mgr = ContainerManager(docker_client=mock_docker_client)
 
         mgr.start("chat", "org/m", "/p/m.gguf", 30001)
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
-        assert kwargs["command"] == ["--host", "0.0.0.0", "--port", "8080"]
+        assert kwargs["entrypoint"] == []
+        assert kwargs["command"] == [
+            "/app/llama-server",
+            "-m", "/storage/m.gguf",
+            "--host", "0.0.0.0",
+            "--port", "8080",
+        ]
 
 
 # ── stop() ──────────────────────────────────────────────────────────────
@@ -277,7 +283,21 @@ def _assert_run_kwargs(call_args) -> None:
     assert kw.get("mem_limit") is not None
     assert kw.get("nano_cpus") is not None
     assert kw.get("network") == "modelctl-net"
-    assert kw.get("command") == ["--host", "0.0.0.0", "--port", "8080"]
+    # Entrypoint is cleared — we run llama-server CLI directly
+    assert kw.get("entrypoint") == []
+    # Storage root is mounted to /storage, model is at /storage/<relative>
+    volume_bind = list(kw.get("volumes", {}).values())[0]
+    assert volume_bind["bind"] == "/storage"
+    # Command is a full llama-server CLI invocation
+    assert kw.get("command", [])[:1] == ["/app/llama-server"]
+    assert "-m" in kw["command"]
+    model_idx = kw["command"].index("-m") + 1
+    assert kw["command"][model_idx] == "/storage/my-model.gguf"
+    assert "--host" in kw["command"]
+    assert "--port" in kw["command"]
+    # Environment should use container paths
+    env = kw.get("environment", {})
+    assert env.get("MODEL_PATH") == "/storage/my-model.gguf"
     # Port mapping: host port → container port 8080
     assert kw.get("ports") == {8080: 30001}
     assert "labels" in kw

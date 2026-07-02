@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     log_level: str = "info"
     hf_token: str = ""
 
+    # ── container orchestration ─────────────────────────────────────
+    llamacpp_image: str = "ghcr.io/ggml-org/llama.cpp:server"
+    docker_network: str = "modelctl-net"
+    container_timeout: int = 30
+
     model_config = {"env_prefix": "MODELCTL_API_"}
 
 

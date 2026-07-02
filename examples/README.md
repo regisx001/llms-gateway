@@ -6,7 +6,7 @@ programmatically to manage llama.cpp inference containers.
 ## Prerequisites
 
 - Docker daemon running (for container orchestration examples)
-- The `llamaserver:latest` image built, or `LLAMACPP_IMAGE` env var set
+- The `ghcr.io/ggml-org/llama.cpp:server` image built, or `LLAMACPP_IMAGE` env var set
 - Python 3.10+ with `modelctl-orch` installed (`uv sync` from repo root)
 
 ## Scripts

@@ -9,6 +9,7 @@ description = "REST API for modelctl — model management"
 requires-python = ">=3.10"
 dependencies = [
     "modelctl-core",
+    "modelctl-orch",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.0",
