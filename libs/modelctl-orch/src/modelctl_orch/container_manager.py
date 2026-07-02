@@ -27,12 +27,29 @@ log = logging.getLogger(__name__)
 # Override via the LLAMACPP_IMAGE env var
 CONTAINER_IMAGE = os.environ.get("LLAMACPP_IMAGE", "llamaserver:latest")
 
+# Docker network for inference containers
+NETWORK_NAME = os.environ.get("MODELCTL_NETWORK", "modelctl-net")
+
 
 class ContainerManager:
     """Controls per-capability inference containers via the Docker SDK."""
 
     def __init__(self, docker_client: docker.DockerClient | None = None) -> None:
         self._client = docker_client or docker.from_env()
+
+    # ------------------------------------------------------------------
+    # Network management
+    # ------------------------------------------------------------------
+
+    def _ensure_network(self) -> str:
+        """Return ``NETWORK_NAME``, creating it first if it does not exist."""
+        try:
+            self._client.networks.get(NETWORK_NAME)
+            log.debug("Network '%s' already exists", NETWORK_NAME)
+        except NotFound:
+            log.info("Creating Docker network '%s' ...", NETWORK_NAME)
+            self._client.networks.create(NETWORK_NAME, driver="bridge")
+        return NETWORK_NAME
 
     # ------------------------------------------------------------------
     # Public API
@@ -92,11 +109,15 @@ class ContainerManager:
                 )
             )
 
+        # The base llama.cpp server image listens on 8080 by default.
+        # Map the allocated host port to the container's 8080 so the
+        # health check and inference clients can reach it via host:port.
+        container_port = 8080
         container: Container = self._client.containers.run(
             image=CONTAINER_IMAGE,
             name=f"modelctl-{capability}-{model_id.replace('/', '-')}",
             detach=True,
-            ports={f"{port}/tcp": port},
+            ports={container_port: port},
             volumes={
                 os.path.dirname(model_path): {
                     "bind": "/models",
@@ -104,11 +125,12 @@ class ContainerManager:
                 },
             },
             environment=env,
+            command=["--host", "0.0.0.0", "--port", str(container_port)],
             mem_limit=profile.memory_limit,
             nano_cpus=int(profile.cpu_count * 1e9),
             device_requests=device_requests,
             labels=labels,
-            network="modelctl-net",
+            network=self._ensure_network(),
         )
 
         return ContainerInfo(

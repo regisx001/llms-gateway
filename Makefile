@@ -14,6 +14,9 @@ help:
 	@echo "║    make test-api    modelctl-api REST API tests      ║"
 	@echo "║    make test-cli    modelctl CLI tests               ║"
 	@echo "║                                                      ║"
+	@echo "║  EXAMPLES                                            ║"
+	@echo "║    make run-example-orch  Orchestrator demo (dry-run)║"
+	@echo "║                                                      ║"
 	@echo "║  WEB FRONTEND                                        ║"
 	@echo "║    make build-web   Build SPA (outputs to static/)   ║"
 	@echo "║    make dev-web     Start SvelteKit dev server       ║"
@@ -64,6 +67,15 @@ dev-web:
 
 build-docker: build-web
 	docker compose build
+
+# ── Examples ──────────────────────────────────────────────────────────────
+.PHONY: run-example-orch
+
+# Run the orchestrator demo (dry-run by default — no Docker needed)
+# Loads .env so LLAMACPP_IMAGE is picked up by the orchestrator.
+run-example-orch:
+	export $$(grep -v '^#' .env | xargs) && \
+		uv run python examples/run_llama_with_orchestrator.py --dry-run
 
 # ── Legacy alias ──────────────────────────────────────────────────────────
 .PHONY: build

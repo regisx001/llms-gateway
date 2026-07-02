@@ -71,14 +71,25 @@ class TestStart:
         kwargs = mock_docker_client.containers.run.call_args.kwargs
         assert kwargs["name"] == "modelctl-chat-org-my-model"
 
-    def test_start_sets_network(self, mock_docker_client, mock_container):
+    def test_start_maps_port_8080(self, mock_docker_client, mock_container):
+        """Host port should be mapped to container port 8080."""
         mock_docker_client.containers.run.return_value = mock_container
         mgr = ContainerManager(docker_client=mock_docker_client)
 
         mgr.start("chat", "org/m", "/p/m.gguf", 30001)
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
-        assert kwargs["network"] == "modelctl-net"
+        assert kwargs["ports"] == {8080: 30001}
+
+    def test_start_sets_command(self, mock_docker_client, mock_container):
+        """Should pass --host and --port flags to override default entrypoint."""
+        mock_docker_client.containers.run.return_value = mock_container
+        mgr = ContainerManager(docker_client=mock_docker_client)
+
+        mgr.start("chat", "org/m", "/p/m.gguf", 30001)
+
+        kwargs = mock_docker_client.containers.run.call_args.kwargs
+        assert kwargs["command"] == ["--host", "0.0.0.0", "--port", "8080"]
 
 
 # ── stop() ──────────────────────────────────────────────────────────────
@@ -266,6 +277,9 @@ def _assert_run_kwargs(call_args) -> None:
     assert kw.get("mem_limit") is not None
     assert kw.get("nano_cpus") is not None
     assert kw.get("network") == "modelctl-net"
+    assert kw.get("command") == ["--host", "0.0.0.0", "--port", "8080"]
+    # Port mapping: host port → container port 8080
+    assert kw.get("ports") == {8080: 30001}
     assert "labels" in kw
     assert kw["labels"]["modelctl.managed"] == "true"
     assert kw["labels"]["modelctl.capability"] == "chat"

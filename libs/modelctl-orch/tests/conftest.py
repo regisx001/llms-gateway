@@ -6,17 +6,28 @@ from unittest.mock import MagicMock, create_autospec
 
 import docker
 import pytest
+from docker.errors import NotFound
 
 
 @pytest.fixture
 def mock_docker_client() -> MagicMock:
     """Return a fully mocked ``docker.DockerClient``.
 
-    All sub-attributes (``containers``, ``containers.run``, etc.) are
-    auto-created mocks so tests can assert calls without setting up
-    each one individually.
+    The ``networks`` sub-attribute is pre-wired so that
+    ``networks.get()`` raises ``NotFound`` — triggering automatic
+    network creation in ``_ensure_network()`` — unless overridden.
     """
-    return create_autospec(docker.DockerClient, instance=True)
+    client = create_autospec(docker.DockerClient, instance=True)
+
+    # Wire networks.get to raise NotFound by default (auto-create path)
+    client.networks.get.side_effect = NotFound("network not found")
+
+    # Mock the created network object returned by networks.create
+    network_mock = MagicMock()
+    network_mock.name = "modelctl-net"
+    client.networks.create.return_value = network_mock
+
+    return client
 
 
 @pytest.fixture
