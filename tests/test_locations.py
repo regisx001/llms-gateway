@@ -33,7 +33,13 @@ def test_find_registry_root_finds_project():
 
 
 def test_find_storage_root_finds_project():
-    """From within the project tree, should find the real storage/ dir."""
+    """From within the project tree, should find the real storage/ dir.
+
+    Note: storage/ is gitignored (large model files), so it may not
+    exist in CI. The name assertion validates resolution; the existence
+    check only applies when the directory is present.
+    """
     root = find_storage_root()
     assert root.name == "storage"
-    assert root.is_dir()
+    if root.exists():
+        assert root.is_dir()
