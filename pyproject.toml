@@ -17,6 +17,9 @@ modelctl-api = { workspace = true }
 [tool.uv.workspace]
 members = ["libs/*", "apps/*"]
 
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+
 [dependency-groups]
 dev = [
     "modelctl-api",

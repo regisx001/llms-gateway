@@ -18,5 +18,8 @@ modelctl = "modelctl.cli:main"
 [tool.uv.sources]
 modelctl-core = { workspace = true }
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/modelctl"]

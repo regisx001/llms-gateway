@@ -297,9 +297,9 @@ class ModelService:
         m = registry.find_model(model_id)
         if not m:
             raise ModelNotFoundError(f"Model not found: {model_id}")
-        if m.status != "installed":
+        if m.status not in ("installed", "active"):
             raise ModelctlError(
-                f"Model status is '{m.status}', must be 'installed'"
+                f"Model status is '{m.status}', must be 'installed' or 'active'"
             )
 
         primary = next(

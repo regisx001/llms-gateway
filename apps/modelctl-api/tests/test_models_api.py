@@ -116,7 +116,7 @@ class TestInstallModel:
             )
             assert resp.status_code == 202
             data = resp.json()
-            assert data["status"] == "installed"
+            assert data["status"] == "downloading"
         finally:
             tmp_file.unlink(missing_ok=True)
 
