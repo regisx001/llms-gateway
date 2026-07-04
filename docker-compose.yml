@@ -12,11 +12,12 @@ services:
       - "${LLAMACPP_PORT}:8080"
       - "${MODELCTL_API_PORT:-8000}:8000"
     volumes:
-      - ./registry:/opt/model-manager/registry
-      - ./storage:/models
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/LLMGateway-Models/registry:${HOME}/LLMGateway-Models/registry
+      - ${HOME}/LLMGateway-Models:${HOME}/LLMGateway-Models
     environment:
-      - MODELCTL_API_REGISTRY_DIR=/opt/model-manager/registry
-      - MODELCTL_API_STORAGE_DIR=/models
+      - MODELCTL_API_REGISTRY_DIR=${HOME}/LLMGateway-Models/registry
+      - MODELCTL_API_STORAGE_DIR=${HOME}/LLMGateway-Models/storage
       - MODELCTL_API_PORT=${MODELCTL_API_PORT:-8000}
       - HF_TOKEN=${HF_TOKEN:-}
     command: >

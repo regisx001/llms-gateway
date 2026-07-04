@@ -20,7 +20,8 @@ start_modelctl_api() {
 # ── Start llama-server with active model ────────────────────────────
 start_llama_server() {
     local model_flag=""
-    for link in /models/*.gguf; do
+    local storage_dir="${MODELCTL_API_STORAGE_DIR:-/home/regisx001/LLMGateway-Models/storage}"
+    for link in "$storage_dir"/*.gguf; do
         if [ -L "$link" ] && [ -f "$(readlink -f "$link" 2>/dev/null)" ]; then
             echo "Loading model: $(readlink -f "$link")"
             model_flag="-m $(readlink -f "$link")"
@@ -28,7 +29,7 @@ start_llama_server() {
         fi
     done
     if [ -z "$model_flag" ]; then
-        echo "No active model symlink found in /models/"
+        echo "No active model symlink found in $storage_dir/"
     fi
 
     $LLAMA_SERVER $model_flag "$@" &

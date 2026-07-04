@@ -16,9 +16,9 @@ def find_registry_root() -> Path:
     if env_root:
         return Path(env_root)
 
-    container_path = Path("/opt/model-manager/registry")
-    if container_path.exists():
-        return container_path
+    fallback_container = Path("/opt/model-manager/registry")
+    if fallback_container.exists():
+        return fallback_container
 
     current = Path(__file__).resolve().parent
     for _ in range(8):
@@ -40,9 +40,9 @@ def find_storage_root() -> Path:
     if env_root:
         return Path(env_root)
 
-    container_path = Path("/models")
-    if container_path.exists():
-        return container_path
+    fallback_container = Path("/home/regisx001/LLMGateway-Models/storage")
+    if fallback_container.exists():
+        return fallback_container
 
     current = Path(__file__).resolve().parent
     for _ in range(8):
