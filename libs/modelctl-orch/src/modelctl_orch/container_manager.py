@@ -151,6 +151,11 @@ class ContainerManager:
                 "GPU requested but no NVIDIA runtime detected — falling back to CPU"
             )
 
+        # ── build capability-specific flags ────────────────────────
+        extra_flags: list[str] = []
+        if capability == "embedding":
+            extra_flags = ["--embeddings", "--pooling", "last"]
+
         # ── run llama-server CLI directly ───────────────────────────
         # Clear the image's entrypoint.sh and invoke llama-server with
         # the model from its actual storage path.
@@ -172,6 +177,7 @@ class ContainerManager:
                 "-m", model_mount_path,
                 "--host", "0.0.0.0",
                 "--port", str(container_port),
+                *extra_flags,
             ],
             mem_limit=profile.memory_limit,
             nano_cpus=int(profile.cpu_count * 1e9),

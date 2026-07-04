@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
     from modelctl_api.services.container_service import (
         ContainerNotFoundError,
         ContainerServiceError,
+        DockerUnavailableError,
         ModelNotInstalledError,
     )
     from modelctl_api.services.model_service import (
@@ -105,6 +106,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(ModelctlError)
     async def modelctl_error_handler(request: Request, exc: ModelctlError):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(DockerUnavailableError)
+    async def docker_unavailable_handler(
+        request: Request, exc: DockerUnavailableError
+    ):
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
 
     @app.exception_handler(ContainerServiceError)
     async def container_service_error_handler(

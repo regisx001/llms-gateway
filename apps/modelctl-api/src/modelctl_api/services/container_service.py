@@ -8,6 +8,8 @@ from pathlib import Path
 
 import docker
 
+import docker
+
 from modelctl_core import registry
 from modelctl_orch.container_manager import ContainerManager
 from modelctl_orch.models import (
@@ -28,6 +30,10 @@ class ContainerNotFoundError(ContainerServiceError):
     """Requested container does not exist."""
 
 
+class DockerUnavailableError(ContainerServiceError):
+    """Docker is not available — cannot manage containers."""
+
+
 class ModelNotInstalledError(ContainerServiceError):
     """Model must be installed before starting a container."""
 
@@ -46,14 +52,32 @@ class ContainerService:
         self._network = network or os.environ.get(
             "MODELCTL_NETWORK", "modelctl-net"
         )
-        self._manager = ContainerManager()
+        self._manager: ContainerManager | None = None
         self._allocator = PortAllocator()
+        self._init_docker()
+
+    def _init_docker(self) -> None:
+        """Try connecting to Docker — non-fatal if unavailable."""
+        try:
+            self._manager = ContainerManager()
+        except docker.errors.DockerException as e:
+            log.warning("Docker not available — container management disabled: %s", e)
+
+    def _require_docker(self) -> ContainerManager:
+        """Raise ``DockerUnavailableError`` if Docker is not connected."""
+        if self._manager is None:
+            raise DockerUnavailableError(
+                "Docker is not available in this environment. "
+                "Container management requires the Docker socket to be mounted."
+            )
+        return self._manager
 
     # ── list ─────────────────────────────────────────────────────────
 
     def list_containers(self) -> list[dict]:
         """Return all managed containers."""
-        containers = self._manager.list()
+        mgr = self._require_docker()
+        containers = mgr.list()
         return [self._info_to_dict(c) for c in containers]
 
     # ── start ────────────────────────────────────────────────────────
@@ -106,7 +130,8 @@ class ContainerService:
         port = self._allocator.allocate(capability)
 
         # Start the container
-        info = self._manager.start(
+        mgr = self._require_docker()
+        info = mgr.start(
             capability=capability,
             model_id=model_id,
             model_path=model_path,
@@ -124,13 +149,14 @@ class ContainerService:
 
     def stop_container(self, container_id: str, timeout: int = 10) -> dict:
         """Stop and remove a managed container."""
-        info = self._manager.inspect(container_id)
+        mgr = self._require_docker()
+        info = mgr.inspect(container_id)
         if info is None:
             raise ContainerNotFoundError(
                 f"Container not found: {container_id}"
             )
 
-        self._manager.stop(container_id, timeout=timeout)
+        mgr.stop(container_id, timeout=timeout)
         self._allocator.release(info.port)
         log.info("Stopped container %s", container_id)
         return {"status": "stopped", "container_id": container_id}
@@ -139,7 +165,8 @@ class ContainerService:
 
     def inspect_container(self, container_id: str) -> dict:
         """Get detailed info for a single container."""
-        info = self._manager.inspect(container_id)
+        mgr = self._require_docker()
+        info = mgr.inspect(container_id)
         if info is None:
             raise ContainerNotFoundError(
                 f"Container not found: {container_id}"
@@ -150,26 +177,28 @@ class ContainerService:
 
     def get_logs(self, container_id: str, tail: int = 50) -> dict:
         """Return recent logs for a container."""
-        info = self._manager.inspect(container_id)
+        mgr = self._require_docker()
+        info = mgr.inspect(container_id)
         if info is None:
             raise ContainerNotFoundError(
                 f"Container not found: {container_id}"
             )
-        logs = self._manager.logs(container_id, tail=tail)
+        logs = mgr.logs(container_id, tail=tail)
         return {"container_id": container_id, "logs": logs}
 
     # ── restart ──────────────────────────────────────────────────────
 
     def restart_container(self, container_id: str, timeout: int = 10) -> dict:
         """Restart a managed container."""
-        info = self._manager.inspect(container_id)
+        mgr = self._require_docker()
+        info = mgr.inspect(container_id)
         if info is None:
             raise ContainerNotFoundError(
                 f"Container not found: {container_id}"
             )
-        self._manager.restart(container_id, timeout=timeout)
+        mgr.restart(container_id, timeout=timeout)
         log.info("Restarted container %s", container_id)
-        return self._info_to_dict(self._manager.inspect(container_id))
+        return self._info_to_dict(mgr.inspect(container_id))
 
     # ── helpers ──────────────────────────────────────────────────────
 
