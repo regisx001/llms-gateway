@@ -1,112 +1,65 @@
-"""Tests for modelctl_orch.port_allocator — port allocation and conflict detection."""
+"""Tests for modelctl_orch.port_allocator — capability tracking for internal containers."""
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
-from modelctl_orch.port_allocator import PortAllocator
-
-
-class TestBasePort:
-    """Port resolution: defaults and env overrides."""
-
-    def test_default_chat(self):
-        pa = PortAllocator()
-        assert pa.get_base_port("chat") == 30001
-
-    def test_default_embedding(self):
-        pa = PortAllocator()
-        assert pa.get_base_port("embedding") == 30002
-
-    def test_default_experimental(self):
-        pa = PortAllocator()
-        assert pa.get_base_port("experimental") == 30005
-
-    def test_env_override(self, monkeypatch):
-        monkeypatch.setenv("MODELCTL_CHAT_PORT", "31001")
-        pa = PortAllocator()
-        assert pa.get_base_port("chat") == 31001
-
-    def test_env_override_embedding(self, monkeypatch):
-        monkeypatch.setenv("MODELCTL_EMBEDDING_PORT", "31002")
-        pa = PortAllocator()
-        assert pa.get_base_port("embedding") == 31002
-
-    def test_unknown_capability_falls_back(self):
-        pa = PortAllocator()
-        assert pa.get_base_port("unknown") == 30001
+from modelctl_orch.port_allocator import INTERNAL_CONTAINER_PORT, PortAllocator
 
 
 class TestAllocate:
-    """Port allocation logic."""
+    """Capability allocation — always returns the internal container port."""
 
     def test_allocate_chat(self):
         pa = PortAllocator()
         port = pa.allocate("chat")
-        assert port >= 30001
-        assert port < 30101
+        assert port == INTERNAL_CONTAINER_PORT  # 8080
 
     def test_allocate_embedding(self):
         pa = PortAllocator()
         port = pa.allocate("embedding")
-        assert port >= 30002
-        assert port < 30102
+        assert port == INTERNAL_CONTAINER_PORT
 
-    def test_allocate_unique_ports(self):
+    def test_allocate_experimental(self):
         pa = PortAllocator()
-        p1 = pa.allocate("chat")
-        p2 = pa.allocate("embedding")
-        assert p1 != p2
+        port = pa.allocate("experimental")
+        assert port == INTERNAL_CONTAINER_PORT
 
     def test_allocate_same_capability_twice(self):
         pa = PortAllocator()
         p1 = pa.allocate("chat")
         p2 = pa.allocate("chat")
-        assert p1 != p2
+        assert p1 == p2 == INTERNAL_CONTAINER_PORT
 
-    def test_release_frees_port(self):
+    def test_is_active(self):
+        pa = PortAllocator()
+        assert not pa.is_active("chat")
+        pa.allocate("chat")
+        assert pa.is_active("chat")
+
+    def test_release_by_capability(self):
         pa = PortAllocator()
         pa.allocate("chat")
+        assert pa.is_active("chat")
+        pa.release("chat")
+        assert not pa.is_active("chat")
+
+    def test_release_by_port_int_is_noop(self):
+        pa = PortAllocator()
         pa.allocate("chat")
-        # After release, the first slot becomes available again
-        pa.release(30001)
-        port = pa.allocate("chat")
-        assert port == 30001
+        pa.release(8080)  # backward compat — no-op, shouldn't crash
+        assert pa.is_active("chat")  # still active
 
-    def test_release_nonexistent_port(self):
+    def test_release_unknown_capability(self):
         pa = PortAllocator()
-        pa.release(99999)  # should not raise
+        pa.release("unknown")  # should not raise
 
-
-class TestEnvOverridesWithAllocate:
-    """Allocation respects env overrides."""
-
-    def test_allocate_with_env_override(self, monkeypatch):
-        monkeypatch.setenv("MODELCTL_CHAT_PORT", "31001")
+    def test_multiple_capabilities(self):
         pa = PortAllocator()
-        port = pa.allocate("chat")
-        assert port == 31001
-
-    def test_allocate_env_override_then_next(self, monkeypatch):
-        monkeypatch.setenv("MODELCTL_CHAT_PORT", "31001")
-        pa = PortAllocator()
-        pa.allocate("chat")  # takes 31001
-        port = pa.allocate("chat")  # should take 31002
-        assert port == 31002
-
-
-class TestAllocateExhaustion:
-    """Port exhaustion when all ports in range are occupied."""
-
-    def test_raises_on_exhaustion(self):
-        pa = PortAllocator()
-        # We can't reliably occupy 100 ports, so check the reservation path
-        # by reserving a port and verifying it's skipped
-        pa.allocate("chat")  # takes 30001
-        pa._reserved.add(30001)  # double-reserve (already reserved)
-        # allocator scans past 30001 since it's in _reserved
-        port = pa.allocate("chat")
-        assert port != 30001
-        assert port == 30002
+        pa.allocate("chat")
+        pa.allocate("embedding")
+        assert pa.is_active("chat")
+        assert pa.is_active("embedding")
+        pa.release("chat")
+        assert not pa.is_active("chat")
+        assert pa.is_active("embedding")

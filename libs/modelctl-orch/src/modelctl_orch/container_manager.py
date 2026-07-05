@@ -81,11 +81,18 @@ class ContainerManager:
         capability: Capability,
         model_id: str,
         model_path: str,
-        port: int,
         storage_root: str = "",
         profile: ResourceProfile | None = None,
     ) -> ContainerInfo:
         """Start a new inference container for *capability*.
+
+        The container is named ``modelctl-{capability}`` (fixed per
+        capability) and runs on the internal Docker network
+        (``modelctl-net``) only — no ports are exposed to the host.
+        Nginx routes requests to it by container name.
+
+        If a container for the same capability already exists, it is
+        stopped and removed first.
 
         Parameters
         ----------
@@ -95,8 +102,6 @@ class ContainerManager:
             Identifier used by the registry (for metadata / labels).
         model_path:
             Absolute path to the GGUF model file on the host.
-        port:
-            Host port to bind the container to.
         storage_root:
             Host path to the storage root — mounted inside the container so
             the model can be loaded from its real storage location.
@@ -111,11 +116,14 @@ class ContainerManager:
             capability, ResourceProfile()
         )
 
+        container_port = 8080
+        container_name = f"modelctl-{capability}"
+
         labels = {
             "modelctl.managed": "true",
             "modelctl.capability": capability,
             "modelctl.model_id": model_id,
-            "modelctl.port": str(port),
+            "modelctl.port": str(container_port),
         }
 
         # ── resolve container paths ─────────────────────────────────
@@ -125,7 +133,9 @@ class ContainerManager:
         model_mount_path = os.path.normpath(
             f"/storage/{os.path.relpath(model_path, storage_root)}"
         )
-        container_port = 8080
+
+        # ── Stop any existing container for this capability ─────────
+        self._stop_by_name(container_name)
 
         env = {
             "MODEL_PATH": model_mount_path,
@@ -157,13 +167,12 @@ class ContainerManager:
             extra_flags = ["--embeddings", "--pooling", "last"]
 
         # ── run llama-server CLI directly ───────────────────────────
-        # Clear the image's entrypoint.sh and invoke llama-server with
-        # the model from its actual storage path.
+        # No host port binding — the container is reachable on the
+        # internal Docker network by its fixed name (modelctl-chat, etc.).
         container: Container = self._client.containers.run(
             image=CONTAINER_IMAGE,
-            name=f"modelctl-{capability}-{model_id.replace('/', '-')}",
+            name=container_name,
             detach=True,
-            ports={container_port: port},
             volumes={
                 storage_root: {
                     "bind": "/storage",
@@ -192,10 +201,23 @@ class ContainerManager:
             model_id=model_id,
             model_name=model_id.split(
                 "/")[-1] if "/" in model_id else model_id,
-            port=port,
+            port=container_port,
             status=ContainerState.STARTING,
             resource_profile=profile,
         )
+
+    def _stop_by_name(self, container_name: str) -> None:
+        """Stop and remove a container by name if it exists."""
+        try:
+            existing = self._client.containers.get(container_name)
+            log.info(
+                "Stopping existing container '%s' (%s) — replacing with new model",
+                container_name, existing.short_id,
+            )
+            existing.stop(timeout=10)
+            existing.remove()
+        except NotFound:
+            pass  # no existing container — nothing to do
 
     def stop(self, container_id: str, timeout: int = 10) -> None:
         """Gracefully stop and remove a container."""

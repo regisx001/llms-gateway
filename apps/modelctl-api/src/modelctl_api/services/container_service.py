@@ -17,7 +17,6 @@ from modelctl_orch.models import (
     ContainerState,
     ResourceProfile,
 )
-from modelctl_orch.port_allocator import PortAllocator
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +52,6 @@ class ContainerService:
             "MODELCTL_NETWORK", "modelctl-net"
         )
         self._manager: ContainerManager | None = None
-        self._allocator = PortAllocator()
         self._init_docker()
 
     def _init_docker(self) -> None:
@@ -61,7 +59,8 @@ class ContainerService:
         try:
             self._manager = ContainerManager()
         except docker.errors.DockerException as e:
-            log.warning("Docker not available — container management disabled: %s", e)
+            log.warning(
+                "Docker not available — container management disabled: %s", e)
 
     def _require_docker(self) -> ContainerManager:
         """Raise ``DockerUnavailableError`` if Docker is not connected."""
@@ -126,22 +125,18 @@ class ContainerService:
                 gpu_count=gpu_count or 1,
             )
 
-        # Allocate a port
-        port = self._allocator.allocate(capability)
-
-        # Start the container
+        # Start the container (no host port — internal network only)
         mgr = self._require_docker()
         info = mgr.start(
             capability=capability,
             model_id=model_id,
             model_path=model_path,
             storage_root=storage_root,
-            port=port,
             profile=profile,
         )
         log.info(
-            "Started container %s for model %s (%s) on port %d",
-            info.id, model_id, capability, port,
+            "Started container %s for model %s (%s)",
+            info.id, model_id, capability,
         )
         return self._info_to_dict(info)
 
@@ -157,7 +152,6 @@ class ContainerService:
             )
 
         mgr.stop(container_id, timeout=timeout)
-        self._allocator.release(info.port)
         log.info("Stopped container %s", container_id)
         return {"status": "stopped", "container_id": container_id}
 

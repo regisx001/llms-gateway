@@ -1,5 +1,20 @@
 services:
 
+  # ── Nginx reverse proxy ─────────────────────────────────────────────
+  #     Single entry point for all inference requests. Routes to
+  #     per-capability containers on the internal modelctl-net.
+  nginx:
+    image: nginx:alpine
+    container_name: modelctl-nginx
+    ports:
+      - "${NGINX_PORT:-6060}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - llama-server
+    networks:
+      - modelctl-net
+
   llama-server:
     build:
       context: .
@@ -9,7 +24,6 @@ services:
     container_name: llama-server
     # restart: unless-stopped
     ports:
-      - "${LLAMACPP_PORT}:8080"
       - "${MODELCTL_API_PORT:-8000}:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -20,5 +34,12 @@ services:
       - MODELCTL_API_STORAGE_DIR=${HOME}/LLMGateway-Models/storage
       - MODELCTL_API_PORT=${MODELCTL_API_PORT:-8000}
       - HF_TOKEN=${HF_TOKEN:-}
+    networks:
+      - modelctl-net
     command: >
       --host 0.0.0.0 --port 8080
+
+networks:
+  modelctl-net:
+    external: true
+    name: ${MODELCTL_NETWORK:-modelctl-net}
