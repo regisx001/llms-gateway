@@ -26,7 +26,6 @@ class TestStart:
             capability="chat",
             model_id="org/my-model",
             model_path="/home/storage/models/my-model.gguf",
-            port=30001,
         )
 
         mock_docker_client.containers.run.assert_called_once()
@@ -35,7 +34,7 @@ class TestStart:
         assert info.capability == "chat"
         assert info.model_id == "org/my-model"
         assert info.model_name == "my-model"
-        assert info.port == 30001
+        assert info.port == 8080  # internal container port, never host-bound
         assert info.status == ContainerState.STARTING
         assert info.id == "abc123def456"
 
@@ -44,7 +43,7 @@ class TestStart:
         mgr = ContainerManager(docker_client=mock_docker_client)
         profile = ResourceProfile(memory_limit="16g", cpu_count=8.0)
 
-        info = mgr.start("chat", "org/m", "/p/m.gguf", 30001, profile=profile)
+        info = mgr.start("chat", "org/m", "/p/m.gguf", profile=profile)
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
         assert kwargs["mem_limit"] == "16g"
@@ -56,37 +55,64 @@ class TestStart:
         mgr = ContainerManager(docker_client=mock_docker_client)
         cpu_profile = ResourceProfile(gpu_device=None, gpu_count=0)
 
-        mgr.start("embedding", "org/m", "/p/m.gguf",
-                  30002, profile=cpu_profile)
+        mgr.start("embedding", "org/m", "/p/m.gguf", profile=cpu_profile)
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
         assert kwargs.get("device_requests") == []
 
-    def test_start_creates_expected_name(self, mock_docker_client, mock_container):
+    def test_start_uses_fixed_container_name(self, mock_docker_client, mock_container):
+        """Container name should be modelctl-{capability} — fixed and predictable."""
         mock_docker_client.containers.run.return_value = mock_container
         mgr = ContainerManager(docker_client=mock_docker_client)
 
-        mgr.start("chat", "org/my-model", "/p/m.gguf", 30001)
+        mgr.start("chat", "org/my-model", "/p/m.gguf")
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
-        assert kwargs["name"] == "modelctl-chat-org-my-model"
+        assert kwargs["name"] == "modelctl-chat"
 
-    def test_start_maps_port_8080(self, mock_docker_client, mock_container):
-        """Host port should be mapped to container port 8080."""
+    def test_start_embedding_uses_fixed_name(self, mock_docker_client, mock_container):
+        """Embedding container should be named modelctl-embedding."""
         mock_docker_client.containers.run.return_value = mock_container
         mgr = ContainerManager(docker_client=mock_docker_client)
 
-        mgr.start("chat", "org/m", "/p/m.gguf", 30001)
+        mgr.start("embedding", "org/embed-model", "/p/m.gguf")
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
-        assert kwargs["ports"] == {8080: 30001}
+        assert kwargs["name"] == "modelctl-embedding"
+
+    def test_start_replaces_existing_container(self, mock_docker_client, mock_container):
+        """If a container with the same name exists, stop+remove it first."""
+        mock_docker_client.containers.run.return_value = mock_container
+        existing = MagicMock()
+        mock_docker_client.containers.get.return_value = existing
+        mgr = ContainerManager(docker_client=mock_docker_client)
+
+        mgr.start("chat", "org/new-model", "/p/new.gguf")
+
+        # Should have tried to get the existing container by name
+        mock_docker_client.containers.get.assert_called_with("modelctl-chat")
+        # Should have stopped and removed existing
+        existing.stop.assert_called_once()
+        existing.remove.assert_called_once()
+        # Should have started new one
+        mock_docker_client.containers.run.assert_called_once()
+
+    def test_start_no_host_port_binding(self, mock_docker_client, mock_container):
+        """No 'ports' kwarg — container is network-only, not host-exposed."""
+        mock_docker_client.containers.run.return_value = mock_container
+        mgr = ContainerManager(docker_client=mock_docker_client)
+
+        mgr.start("chat", "org/m", "/p/m.gguf")
+
+        kwargs = mock_docker_client.containers.run.call_args.kwargs
+        assert "ports" not in kwargs
 
     def test_start_sets_command_and_entrypoint(self, mock_docker_client, mock_container):
         """Should clear entrypoint and use llama-server CLI directly."""
         mock_docker_client.containers.run.return_value = mock_container
         mgr = ContainerManager(docker_client=mock_docker_client)
 
-        mgr.start("chat", "org/m", "/p/m.gguf", 30001)
+        mgr.start("chat", "org/m", "/p/m.gguf")
 
         kwargs = mock_docker_client.containers.run.call_args.kwargs
         assert kwargs["entrypoint"] == []
@@ -237,7 +263,7 @@ class TestBuildInfo:
         assert info.capability == "chat"
         assert info.model_id == "org/my-model"
         assert info.model_name == "my-model"
-        assert info.port == 30001
+        assert info.port == 8080
         assert info.status == ContainerState.RUNNING
         assert info.started_at == "2026-07-02T12:00:00Z"
 
@@ -248,7 +274,7 @@ class TestBuildInfo:
 
         assert info.status == ContainerState.STOPPED
         assert info.capability == "embedding"
-        assert info.port == 30002
+        assert info.port == 8080
 
     def test_container_without_labels(self):
         from modelctl_orch.container_manager import ContainerManager
@@ -298,8 +324,8 @@ def _assert_run_kwargs(call_args) -> None:
     # Environment should use container paths
     env = kw.get("environment", {})
     assert env.get("MODEL_PATH") == "/storage/my-model.gguf"
-    # Port mapping: host port → container port 8080
-    assert kw.get("ports") == {8080: 30001}
+    # No host port binding — internal network access only
+    assert "ports" not in kw
     assert "labels" in kw
     assert kw["labels"]["modelctl.managed"] == "true"
     assert kw["labels"]["modelctl.capability"] == "chat"

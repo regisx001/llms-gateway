@@ -39,11 +39,11 @@ def mock_container() -> MagicMock:
         "modelctl.managed": "true",
         "modelctl.capability": "chat",
         "modelctl.model_id": "org/my-model",
-        "modelctl.port": "30001",
+        "modelctl.port": "8080",
     }
     c.status = "running"
     c.attrs = {"State": {"StartedAt": "2026-07-02T12:00:00Z"}}
-    c.name = "modelctl-chat-org-my-model"
+    c.name = "modelctl-chat"
     return c
 
 
@@ -56,9 +56,9 @@ def mock_container_stopped() -> MagicMock:
         "modelctl.managed": "true",
         "modelctl.capability": "embedding",
         "modelctl.model_id": "other/model",
-        "modelctl.port": "30002",
+        "modelctl.port": "8080",
     }
     c.status = "exited"
     c.attrs = {"State": {"StartedAt": "2026-07-01T10:00:00Z"}}
-    c.name = "modelctl-embedding-other-model"
+    c.name = "modelctl-embedding"
     return c

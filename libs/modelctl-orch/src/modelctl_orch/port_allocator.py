@@ -1,64 +1,46 @@
 """Port allocation for per-capability inference containers.
 
-Manages the default port ranges defined in CAPABILITY_PORTS and
-scans for the next available port within each range if the default
-is already taken.
+With nginx as reverse proxy, inference containers run on the internal
+Docker network only — no host ports are exposed. Each container uses
+the same internal port (8080) and is reachable by its fixed name
+(modelctl-chat, modelctl-embedding, etc.).
+
+This module now simply tracks which capabilities are active and
+returns the internal port for each.
 """
 
 from __future__ import annotations
 
-import os
-import socket
 from typing import Set
 
 from modelctl_orch.models import (
-    CAPABILITY_PORT_ENV_VARS,
     CAPABILITY_PORTS,
     Capability,
 )
 
+# Internal port used by all inference containers
+INTERNAL_CONTAINER_PORT = 8080
+
 
 class PortAllocator:
-    """Reserves and tracks ports for inference containers."""
+    """Tracks active capabilities — no host port scanning needed."""
 
     def __init__(self) -> None:
-        self._reserved: Set[int] = set()
-
-    def get_base_port(self, capability: Capability) -> int:
-        """Return the configured base port for *capability*.
-
-        Respects environment overrides (e.g. ``MODELCTL_CHAT_PORT``).
-        """
-        env_var = CAPABILITY_PORT_ENV_VARS.get(capability)
-        if env_var and (override := os.environ.get(env_var)):
-            return int(override)
-        return CAPABILITY_PORTS.get(capability, 30001)
+        self._reserved: Set[str] = set()
 
     def allocate(self, capability: Capability) -> int:
-        """Return an available port for *capability*.
+        """Mark *capability* as active and return the internal port."""
+        self._reserved.add(capability)
+        return INTERNAL_CONTAINER_PORT
 
-        Starts at the base port and scans upward within a 100-port range
-        until it finds one that is free (not reserved and not in use).
-        """
-        base = self.get_base_port(capability)
-        for offset in range(100):
-            port = base + offset
-            if port in self._reserved:
-                continue
-            if not self._port_in_use(port):
-                self._reserved.add(port)
-                return port
-        raise RuntimeError(
-            f"no available port found for capability '{capability}' "
-            f"(scanned {base}-{base + 99})"
-        )
+    def release(self, capability: Capability | int) -> None:
+        """Release a capability (accepts capability string or port int)."""
+        if isinstance(capability, int):
+            # Backward compat: port int — find by internal port (always 8080)
+            # No-op since we track by capability string
+            return
+        self._reserved.discard(capability)
 
-    def release(self, port: int) -> None:
-        """Release a previously allocated port."""
-        self._reserved.discard(port)
-
-    @staticmethod
-    def _port_in_use(port: int) -> bool:
-        """Check if *port* is already bound on the host."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(("127.0.0.1", port)) == 0
+    def is_active(self, capability: Capability) -> bool:
+        """Check whether *capability* is currently allocated."""
+        return capability in self._reserved
