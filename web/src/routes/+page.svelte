@@ -134,6 +134,30 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Dashboard — modelctl</title>
+	<meta
+		name="description"
+		content="Model management dashboard — monitor installed models, storage usage, and API status at a glance."
+	/>
+	<meta
+		name="keywords"
+		content="modelctl, llama.cpp, GGUF, model management, dashboard, HuggingFace"
+	/>
+	<meta property="og:title" content="Dashboard — modelctl" />
+	<meta
+		property="og:description"
+		content="Model management dashboard — monitor installed models, storage usage, and API status."
+	/>
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content="Dashboard — modelctl" />
+	<meta
+		name="twitter:description"
+		content="Model management dashboard — monitor installed models, storage usage, and API status."
+	/>
+</svelte:head>
+
 <div class="mx-auto flex w-full flex-col gap-6 p-6">
 	<!-- ── Header ─────────────────────────────────────────────── -->
 	<div class="flex items-center justify-between">

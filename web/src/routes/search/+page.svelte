@@ -24,6 +24,26 @@
 
 <svelte:head>
     <title>Search — modelctl</title>
+    <meta
+        name="description"
+        content="Search HuggingFace for GGUF models — find and install models for llama.cpp inference."
+    />
+    <meta
+        name="keywords"
+        content="modelctl, HuggingFace, GGUF, model search, llama.cpp, AI models"
+    />
+    <meta property="og:title" content="Search — modelctl" />
+    <meta
+        property="og:description"
+        content="Search HuggingFace for GGUF models — find and install models for llama.cpp inference."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Search — modelctl" />
+    <meta
+        name="twitter:description"
+        content="Search HuggingFace for GGUF models — find and install models for llama.cpp inference."
+    />
 </svelte:head>
 
 <div class="mx-auto flex w-full flex-col gap-6 p-6">

@@ -94,6 +94,26 @@
 
 <svelte:head>
     <title>Models — modelctl</title>
+    <meta
+        name="description"
+        content="Manage installed GGUF models in the registry — view, filter, and remove models."
+    />
+    <meta
+        name="keywords"
+        content="modelctl, GGUF, models, registry, llama.cpp, model management"
+    />
+    <meta property="og:title" content="Models — modelctl" />
+    <meta
+        property="og:description"
+        content="Manage installed GGUF models in the registry — view, filter, and remove models."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Models — modelctl" />
+    <meta
+        name="twitter:description"
+        content="Manage installed GGUF models in the registry — view, filter, and remove models."
+    />
 </svelte:head>
 
 <div class="mx-auto flex w-full flex-col gap-6 p-6">

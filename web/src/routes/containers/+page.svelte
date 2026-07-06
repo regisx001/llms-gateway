@@ -76,6 +76,26 @@
 
 <svelte:head>
     <title>Containers — modelctl</title>
+    <meta
+        name="description"
+        content="Manage llama.cpp inference containers — start, stop, restart, and view container logs."
+    />
+    <meta
+        name="keywords"
+        content="modelctl, containers, llama.cpp, inference, Docker, model serving"
+    />
+    <meta property="og:title" content="Containers — modelctl" />
+    <meta
+        property="og:description"
+        content="Manage llama.cpp inference containers — start, stop, restart, and view container logs."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Containers — modelctl" />
+    <meta
+        name="twitter:description"
+        content="Manage llama.cpp inference containers — start, stop, restart, and view container logs."
+    />
 </svelte:head>
 
 <div class="mx-auto flex w-full flex-col gap-6 p-6">

@@ -49,6 +49,26 @@
 
 <svelte:head>
     <title>System — modelctl</title>
+    <meta
+        name="description"
+        content="System information and health status for modelctl — API status, storage usage, and version info."
+    />
+    <meta
+        name="keywords"
+        content="modelctl, system, health, status, storage, version, llama.cpp"
+    />
+    <meta property="og:title" content="System — modelctl" />
+    <meta
+        property="og:description"
+        content="System information and health status for modelctl — API status, storage usage, and version info."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="System — modelctl" />
+    <meta
+        name="twitter:description"
+        content="System information and health status for modelctl — API status, storage usage, and version info."
+    />
 </svelte:head>
 
 <div class="mx-auto flex max-w-3xl flex-col gap-6 p-6">
