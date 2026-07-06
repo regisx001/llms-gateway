@@ -16,10 +16,7 @@ def find_registry_root() -> Path:
     if env_root:
         return Path(env_root)
 
-    fallback_container = Path("/opt/model-manager/registry")
-    if fallback_container.exists():
-        return fallback_container
-
+    # Tree-walk from the package location up to the project root
     current = Path(__file__).resolve().parent
     for _ in range(8):
         candidate = current / "registry"
@@ -28,6 +25,11 @@ def find_registry_root() -> Path:
         if current.parent == current:
             break
         current = current.parent
+
+    # Container fallback — checked after tree-walk so dev mode prefers project dirs
+    fallback_container = Path("/opt/model-manager/registry")
+    if fallback_container.exists():
+        return fallback_container
 
     fallback = Path(__file__).resolve(
     ).parent.parent.parent.parent.parent / "registry"
@@ -40,10 +42,7 @@ def find_storage_root() -> Path:
     if env_root:
         return Path(env_root)
 
-    fallback_container = Path("/home/regisx001/LLMGateway-Models/storage")
-    if fallback_container.exists():
-        return fallback_container
-
+    # Tree-walk from the package location up to the project root
     current = Path(__file__).resolve().parent
     for _ in range(8):
         candidate = current / "storage"
@@ -52,6 +51,11 @@ def find_storage_root() -> Path:
         if current.parent == current:
             break
         current = current.parent
+
+    # Container fallback — checked after tree-walk so dev mode prefers project dirs
+    fallback_container = Path("/home/regisx001/LLMGateway-Models/storage")
+    if fallback_container.exists():
+        return fallback_container
 
     fallback = Path(__file__).resolve(
     ).parent.parent.parent.parent.parent / "storage"

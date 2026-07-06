@@ -60,24 +60,6 @@ async def remove_model(
     return svc.remove_model(model_id)
 
 
-@router.post("/models/{model_id}/activate", response_model=ModelResponse)
-async def activate_model(
-    model_id: str,
-    svc: ModelService = Depends(get_model_service),
-):
-    """Activate a model for serving — create symlink and update active state."""
-    return svc.activate_model(model_id)
-
-
-@router.post("/models/{model_id}/deactivate", response_model=ModelResponse)
-async def deactivate_model(
-    model_id: str,
-    svc: ModelService = Depends(get_model_service),
-):
-    """Deactivate a model — remove symlink and clear active state."""
-    return svc.deactivate_model(model_id)
-
-
 @router.get("/models/{model_id}/progress", response_model=DownloadProgressResponse)
 async def get_download_progress(
     model_id: str,

@@ -16,7 +16,7 @@
     import { goto } from "$app/navigation";
 
     let models = $state<any[]>([]);
-    let activeModelId = $state<string | null>(null);
+
     let loading = $state(true);
     let error = $state<string | null>(null);
     let polling = $state(false);
@@ -47,13 +47,8 @@
             ]);
             if (!modelRes.ok) throw new Error("Failed to load models");
             const modelData = await modelRes.json();
-            if (infoRes.ok) {
-                const info = await infoRes.json();
-                activeModelId = info.active_models?.[0] ?? null;
-            }
             models = modelData.models.map((m: any) => ({
                 ...m,
-                status: activeModelId === m.id ? "active" : m.status,
                 size: sizeStr(
                     m.artifacts?.reduce(
                         (a: number, art: any) => a + (art.size ?? 0),
@@ -265,32 +260,6 @@
                                 </Table.Cell>
                                 <Table.Cell class="text-right">
                                     <div class="flex justify-end gap-1">
-                                        {#if m.status === "installed"}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onclick={() =>
-                                                    postAction(
-                                                        `/api/v1/models/${m.id}/activate`,
-                                                    )}
-                                            >
-                                                <PlayIcon class="size-3.5" />
-                                                Activate
-                                            </Button>
-                                        {/if}
-                                        {#if activeModelId === m.id}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onclick={() =>
-                                                    postAction(
-                                                        `/api/v1/models/${m.id}/deactivate`,
-                                                    )}
-                                            >
-                                                <SquareIcon class="size-3.5" />
-                                                Stop
-                                            </Button>
-                                        {/if}
                                         {#if m.status !== "downloading"}
                                             <Button
                                                 variant="ghost"

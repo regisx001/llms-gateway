@@ -12,7 +12,6 @@ from modelctl_core import registry
 from modelctl_core.models import Model, Artifact, Download
 from modelctl_core import huggingface as hf
 from modelctl_core import validator
-from .system_service import reload_llama_server
 
 
 # ── domain exceptions ────────────────────────────────────────────────
@@ -279,66 +278,7 @@ class ModelService:
             import shutil
             shutil.rmtree(storage_dir)
 
-        # Clear active state
-        registry.clear_active(model_id)
-
-        # Remove symlink
-        symlink = registry.STORAGE_DIR / f"{m.id}.gguf"
-        if symlink.is_symlink() or symlink.exists():
-            symlink.unlink()
-
         # Remove from registry
         result = _model_to_dict(m)
         registry.remove_model(model_id)
         return result
-
-    def activate_model(self, model_id: str) -> dict:
-        """Activate a model: create symlink, update active.json."""
-        m = registry.find_model(model_id)
-        if not m:
-            raise ModelNotFoundError(f"Model not found: {model_id}")
-        if m.status not in ("installed", "active"):
-            raise ModelctlError(
-                f"Model status is '{m.status}', must be 'installed' or 'active'"
-            )
-
-        primary = next(
-            (a for a in m.artifacts if a.role == "primary"),
-            m.artifacts[0] if m.artifacts else None,
-        )
-        if not primary:
-            raise ModelctlError(f"No artifacts found for {model_id}")
-
-        # Remove existing .gguf symlinks, then create the new one
-        storage_dir = registry.STORAGE_DIR
-        storage_dir.mkdir(exist_ok=True)
-        for p in storage_dir.glob("*.gguf"):
-            if p.is_symlink() or p.exists():
-                p.unlink()
-
-        symlink = storage_dir / f"{m.id}.gguf"
-        target = _storage_path(m) / primary.path
-        relative_target = os.path.relpath(target, storage_dir)
-        symlink.symlink_to(relative_target)
-
-        registry.set_active(model_id, m.type)
-        registry.update_model(model_id, status="active")
-
-        reload_llama_server()
-
-        return self.get_model(model_id)
-
-    def deactivate_model(self, model_id: str) -> dict:
-        """Deactivate a model: remove from active.json, remove symlink."""
-        m = registry.find_model(model_id)
-        if not m:
-            raise ModelNotFoundError(f"Model not found: {model_id}")
-
-        registry.clear_active(model_id)
-        symlink = registry.STORAGE_DIR / f"{m.id}.gguf"
-        if symlink.is_symlink() or symlink.exists():
-            symlink.unlink()
-
-        reload_llama_server()
-
-        return self.get_model(model_id)
