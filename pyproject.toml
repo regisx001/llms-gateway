@@ -10,6 +10,7 @@ dependencies = [
 
 [tool.uv.sources]
 modelctl-core = { workspace = true }
+modelctl-orch = { workspace = true }
 modelctl = { workspace = true }
 modelctl-api = { workspace = true }
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from modelctl_api.services.container_service import ContainerService
 from modelctl_api.services.model_service import ModelService
 from modelctl_api.services.search_service import SearchService
 from modelctl_api.services.system_service import SystemService
@@ -19,3 +20,7 @@ def get_search_service(request: Request) -> SearchService:
 
 def get_system_service(request: Request) -> SystemService:
     return request.app.state.system_service
+
+
+def get_container_service(request: Request) -> ContainerService:
+    return request.app.state.container_service

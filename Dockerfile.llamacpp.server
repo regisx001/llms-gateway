@@ -28,6 +28,10 @@ RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir
 COPY apps/modelctl/ /opt/modelctl/
 RUN pip3 install /opt/modelctl --break-system-packages --no-cache-dir
 
+# Copy and install modelctl-orch (orchestration lib — needed by modelctl-api)
+COPY libs/modelctl-orch/ /opt/modelctl-orch/
+RUN pip3 install /opt/modelctl-orch --break-system-packages --no-cache-dir
+
 # ── Copy modelctl-api skeleton so web build has a target directory ───
 #     Placed at /opt/apps/modelctl-api to match the repo-relative path
 #     that the SvelteKit vite config references (../apps/modelctl-api/static).

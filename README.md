@@ -103,6 +103,76 @@ docker compose up -d
 
 This builds a single container running both `llama-server` (port 8080) and `modelctl-api` (port 8000), mounts `registry/` and `storage/`, and serves the active model.
 
+## Per-Capability Container Architecture
+
+Each model type gets its **own dedicated `llama-server` inference container** managed via the Docker SDK. The `modelctl-orch` library handles the lifecycle.
+
+### Capabilities & Ports
+
+| Capability     | Default Port | Env Override              | Default Resources          |
+|----------------|-------------|---------------------------|----------------------------|
+| `chat`         | `30001`     | `MODELCTL_CHAT_PORT`      | 8 GB RAM, 4 CPU, 1 GPU    |
+| `embedding`    | `30002`     | `MODELCTL_EMBEDDING_PORT` | 2 GB RAM, 2 CPU, 1 GPU    |
+| `reranker`     | `30003`     | `MODELCTL_RERANKER_PORT`  | 4 GB RAM, 2 CPU, 1 GPU    |
+| `vision`       | `30004`     | `MODELCTL_VISION_PORT`    | 8 GB RAM, 4 CPU, 1 GPU    |
+| `experimental` | `30005`     | `MODELCTL_EXPERIMENTAL_PORT` | 4 GB RAM, 2 CPU, 1 GPU |
+
+### Lifecycle State Machine
+
+Each container follows a strict state machine:
+
+```
+stopped ──► starting ──► running ──► stopping ──► stopped
+                │                        │
+                └──► failed ◄────────────┘
+                      │
+                      └──► starting (retry)
+```
+
+Transitions are validated by `modelctl_orch.lifecycle.transition()` — invalid moves raise `TransitionError`.
+
+### Port Allocation
+
+The `PortAllocator` starts at each capability's default port and scans upward (up to 100 ports) to find a free slot. Allocated ports are tracked in-memory to avoid collisions. Ports can be overridden via environment variables.
+
+### Starting a Container (API)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/containers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capability": "chat",
+    "model_id": "<model-id>",
+    "resource_profile": {
+      "memory_limit": "8g",
+      "cpu_count": 4,
+      "gpu_device": "0",
+      "gpu_count": 1
+    }
+  }'
+```
+
+The model must already be installed (via `POST /api/v1/models/install`). The container is launched with the GGUF file mounted from the storage directory, attached to the `modelctl-net` Docker network, and labelled for management (`modelctl.managed=true`, `modelctl.capability`, `modelctl.model_id`, `modelctl.port`).
+
+### Managing Containers
+
+```bash
+# List all managed containers
+curl http://localhost:8000/api/v1/containers
+
+# Inspect a container
+curl http://localhost:8000/api/v1/containers/<container-id>
+
+# View logs
+curl http://localhost:8000/api/v1/containers/<container-id>/logs?tail=100
+
+# Restart
+curl -X POST http://localhost:8000/api/v1/containers/<container-id>/restart
+
+# Stop & remove
+curl -X DELETE http://localhost:8000/api/v1/containers/<container-id>
+```
+
 ### Manage models via API
 
 ```bash

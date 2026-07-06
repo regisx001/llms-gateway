@@ -144,21 +144,17 @@
 
         <Card.Root>
             <Card.Header>
-                <Card.Title class="text-base">Active Model</Card.Title>
+                <Card.Title class="text-base">Inference Containers</Card.Title>
             </Card.Header>
             <Card.Content>
-                {#if info?.active_models?.length}
-                    <div class="flex items-center gap-2">
-                        <CpuIcon class="size-4 text-muted-foreground" />
-                        <code
-                            class="rounded border bg-muted px-2 py-0.5 text-sm"
-                        >
-                            {info.active_models[0]}
-                        </code>
-                    </div>
-                {:else}
-                    <p class="text-sm text-muted-foreground">No active model</p>
-                {/if}
+                <p class="text-sm text-muted-foreground">
+                    Per-capability containers are managed on the
+                    <a
+                        href="/containers"
+                        class="underline hover:text-foreground"
+                        >Containers page</a
+                    >.
+                </p>
             </Card.Content>
         </Card.Root>
     {/if}

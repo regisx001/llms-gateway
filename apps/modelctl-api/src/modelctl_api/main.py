@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from modelctl_api import __version__
 from modelctl_api.config import settings
+from modelctl_api.services.container_service import ContainerService
 from modelctl_api.services.model_service import ModelService
 from modelctl_api.services.search_service import SearchService
 from modelctl_api.services.system_service import SystemService
@@ -31,6 +32,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.model_service = ModelService()
     app.state.search_service = SearchService()
     app.state.system_service = SystemService(version=__version__)
+    app.state.container_service = ContainerService(
+        image=settings.llamacpp_image,
+        network=settings.docker_network,
+    )
 
     if settings.registry_dir:
         import os
@@ -71,6 +76,12 @@ def create_app() -> FastAPI:
     # ── exception handlers ──────────────────────────────────────────
     from fastapi import Request
     from fastapi.responses import JSONResponse
+    from modelctl_api.services.container_service import (
+        ContainerNotFoundError,
+        ContainerServiceError,
+        DockerUnavailableError,
+        ModelNotInstalledError,
+    )
     from modelctl_api.services.model_service import (
         ModelctlError,
         ModelNotFoundError,
@@ -80,14 +91,39 @@ def create_app() -> FastAPI:
     async def not_found_handler(request: Request, exc: ModelNotFoundError):
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
+    @app.exception_handler(ContainerNotFoundError)
+    async def container_not_found_handler(
+        request: Request, exc: ContainerNotFoundError
+    ):
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(ModelNotInstalledError)
+    async def model_not_installed_handler(
+        request: Request, exc: ModelNotInstalledError
+    ):
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
     @app.exception_handler(ModelctlError)
     async def modelctl_error_handler(request: Request, exc: ModelctlError):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+    @app.exception_handler(DockerUnavailableError)
+    async def docker_unavailable_handler(
+        request: Request, exc: DockerUnavailableError
+    ):
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+    @app.exception_handler(ContainerServiceError)
+    async def container_service_error_handler(
+        request: Request, exc: ContainerServiceError
+    ):
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
     # ── register routers (API routes take precedence) ────────────────
-    from modelctl_api.routers import health, models, search, system
+    from modelctl_api.routers import containers, health, models, search, system
 
     app.include_router(health.router)
+    app.include_router(containers.router, prefix="/api/v1")
     app.include_router(models.router, prefix="/api/v1")
     app.include_router(search.router, prefix="/api/v1")
     app.include_router(system.router, prefix="/api/v1")

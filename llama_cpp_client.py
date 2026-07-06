@@ -14,7 +14,7 @@ Prerequisites:
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:9999/v1",
+    base_url="http://localhost:8080/v1",  # nginx reverse proxy
     api_key="sk-no-key-required",  # llama-server ignores this unless --api-key was set
 )
 
