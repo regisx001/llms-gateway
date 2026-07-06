@@ -44,7 +44,7 @@ export const capabilities = [
 // Wrapped in a single object for cross-module export: Svelte requires
 // exported state to not be directly reassigned, but mutating properties
 // of an exported object is fine.
-export const state = $state({
+export const ui = $state({
     containers: [] as ContainerInfo[],
     loading: true,
     error: null as string | null,
@@ -121,53 +121,53 @@ export function capabilityColor(cap: string): string {
 // ── Data fetching ──────────────────────────────────────────────────
 
 export async function loadContainers() {
-    state.error = null;
+    ui.error = null;
     try {
         const res = await fetch(`${config.apiBase}/api/v1/containers`);
         if (!res.ok) throw new Error("Failed to load containers");
         const data = await res.json();
-        state.containers = data.containers ?? [];
+        ui.containers = data.containers ?? [];
     } catch (e) {
-        state.error =
+        ui.error =
             e instanceof Error ? e.message : "Failed to load containers";
     } finally {
-        state.loading = false;
+        ui.loading = false;
     }
 }
 
 export async function loadModels() {
-    state.modelsLoading = true;
+    ui.modelsLoading = true;
     try {
         const res = await fetch(`${config.apiBase}/api/v1/models`);
         if (!res.ok) throw new Error("Failed to load models");
         const data = await res.json();
-        state.availableModels = (data.models ?? []).filter(
+        ui.availableModels = (data.models ?? []).filter(
             (m: ModelEntry) =>
                 m.status === "installed" || m.status === "active",
         );
     } catch {
-        state.availableModels = [];
+        ui.availableModels = [];
     } finally {
-        state.modelsLoading = false;
+        ui.modelsLoading = false;
     }
 }
 
 // ── Actions ────────────────────────────────────────────────────────
 
 export async function startContainer() {
-    if (!state.selectedModelId) return;
-    state.startLoading = true;
-    state.startError = null;
+    if (!ui.selectedModelId) return;
+    ui.startLoading = true;
+    ui.startError = null;
     try {
         const body: Record<string, unknown> = {
-            model_id: state.selectedModelId,
-            capability: state.selectedCapability,
+            model_id: ui.selectedModelId,
+            capability: ui.selectedCapability,
         };
         const profile: Record<string, unknown> = {};
-        if (state.memoryLimit) profile.memory_limit = state.memoryLimit;
-        if (state.cpuCount) profile.cpu_count = parseFloat(state.cpuCount);
-        if (state.gpuDevice) profile.gpu_device = state.gpuDevice;
-        if (state.gpuCount) profile.gpu_count = parseInt(state.gpuCount, 10);
+        if (ui.memoryLimit) profile.memory_limit = ui.memoryLimit;
+        if (ui.cpuCount) profile.cpu_count = parseFloat(ui.cpuCount);
+        if (ui.gpuDevice) profile.gpu_device = ui.gpuDevice;
+        if (ui.gpuCount) profile.gpu_count = parseInt(ui.gpuCount, 10);
         if (Object.keys(profile).length > 0) {
             body.resource_profile = profile;
         }
@@ -183,19 +183,19 @@ export async function startContainer() {
                 .catch(() => ({ detail: res.statusText }));
             throw new Error(err.detail || "Failed to start container");
         }
-        state.startSheetOpen = false;
+        ui.startSheetOpen = false;
         resetForm();
         await loadContainers();
     } catch (e) {
-        state.startError =
+        ui.startError =
             e instanceof Error ? e.message : "Failed to start container";
     } finally {
-        state.startLoading = false;
+        ui.startLoading = false;
     }
 }
 
 export async function stopContainer(id: string) {
-    state.actionLoading = id;
+    ui.actionLoading = id;
     try {
         await fetch(`${config.apiBase}/api/v1/containers/${id}`, {
             method: "DELETE",
@@ -204,12 +204,12 @@ export async function stopContainer(id: string) {
     } catch {
         // Silently fail — next refresh will show correct state
     } finally {
-        state.actionLoading = null;
+        ui.actionLoading = null;
     }
 }
 
 export async function restartContainer(id: string) {
-    state.actionLoading = id;
+    ui.actionLoading = id;
     try {
         await fetch(`${config.apiBase}/api/v1/containers/${id}/restart`, {
             method: "POST",
@@ -218,45 +218,45 @@ export async function restartContainer(id: string) {
     } catch {
         // Silently fail
     } finally {
-        state.actionLoading = null;
+        ui.actionLoading = null;
     }
 }
 
 export async function viewLogs(container: ContainerInfo) {
-    state.logsContainerId = container.id;
-    state.logsContainerName = container.model_name;
-    state.logsSheetOpen = true;
-    state.logsLoading = true;
-    state.logsContent = "";
+    ui.logsContainerId = container.id;
+    ui.logsContainerName = container.model_name;
+    ui.logsSheetOpen = true;
+    ui.logsLoading = true;
+    ui.logsContent = "";
     try {
         const res = await fetch(
             `${config.apiBase}/api/v1/containers/${container.id}/logs?tail=100`,
         );
         if (!res.ok) throw new Error("Failed to fetch logs");
         const data = await res.json();
-        state.logsContent = data.logs || "(no logs)";
+        ui.logsContent = data.logs || "(no logs)";
     } catch (e) {
-        state.logsContent =
+        ui.logsContent =
             e instanceof Error
                 ? `Error: ${e.message}`
                 : "Failed to load logs";
     } finally {
-        state.logsLoading = false;
+        ui.logsLoading = false;
     }
 }
 
 export function resetForm() {
-    state.selectedModelId = "";
-    state.selectedCapability = "chat";
-    state.memoryLimit = "";
-    state.cpuCount = "";
-    state.gpuDevice = "";
-    state.gpuCount = "";
-    state.startError = null;
+    ui.selectedModelId = "";
+    ui.selectedCapability = "chat";
+    ui.memoryLimit = "";
+    ui.cpuCount = "";
+    ui.gpuDevice = "";
+    ui.gpuCount = "";
+    ui.startError = null;
 }
 
 export function openStartSheet() {
     resetForm();
     loadModels();
-    state.startSheetOpen = true;
+    ui.startSheetOpen = true;
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { config } from "$lib/config";
-	import logo from "$lib/assets/favicon.svg";
+	import { goto } from "$app/navigation";
 
 	import * as Card from "$lib/components/ui/card";
 	import { Button } from "$lib/components/ui/button";
@@ -14,14 +14,13 @@
 	import { Spinner } from "$lib/components/ui/spinner";
 
 	import CuboidIcon from "@lucide/svelte/icons/cuboid";
-
 	import DatabaseIcon from "@lucide/svelte/icons/database";
 	import CpuIcon from "@lucide/svelte/icons/cpu";
 	import SearchIcon from "@lucide/svelte/icons/search";
-
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
+	import ActivityIcon from "@lucide/svelte/icons/activity";
 
 	// ── State ────────────────────────────────────────────────────────
 
@@ -46,6 +45,13 @@
 	>([]);
 	let searchQuery = $state("");
 
+	// ── Derived ──────────────────────────────────────────────────────
+
+	let installedCount = $derived(
+		models.filter((m) => m.status === "installed" || m.status === "active")
+			.length,
+	);
+
 	// ── Helpers ──────────────────────────────────────────────────────
 
 	function sizeStr(bytes: number): string {
@@ -58,6 +64,17 @@
 		return `${n.toFixed(1)} PB`;
 	}
 
+	function typeColor(type: string): string {
+		const colors: Record<string, string> = {
+			chat: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+			embedding: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+			reranker: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+			vision: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+			experimental: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+		};
+		return colors[type] ?? "bg-muted text-muted-foreground";
+	}
+
 	async function fetchJson<T>(path: string): Promise<T> {
 		const res = await fetch(`${config.apiBase}${path}`);
 		if (!res.ok) {
@@ -67,11 +84,6 @@
 			throw new Error(body.detail || `HTTP ${res.status}`);
 		}
 		return res.json();
-	}
-
-	async function postAction(path: string) {
-		await fetch(`${config.apiBase}${path}`, { method: "POST" });
-		await loadData();
 	}
 
 	// ── Load ─────────────────────────────────────────────────────────
@@ -122,19 +134,16 @@
 	});
 </script>
 
-<div class="mx-auto flex max-w-6xl flex-col gap-6 p-6">
+<div class="mx-auto flex w-full flex-col gap-6 p-6">
 	<!-- ── Header ─────────────────────────────────────────────── -->
-	<header class="flex items-center justify-between">
-		<div class="flex items-center gap-3">
-			<img src={logo} alt="modelctl" class="size-10" />
-			<div>
-				<h1 class="text-xl font-semibold">modelctl</h1>
-				<p class="text-sm text-muted-foreground">
-					Model Management Dashboard
-				</p>
-			</div>
+	<div class="flex items-center justify-between">
+		<div>
+			<h1 class="text-2xl font-semibold">Dashboard</h1>
+			<p class="text-sm text-muted-foreground">
+				Model Management Dashboard
+			</p>
 		</div>
-		<div class="flex items-center gap-3">
+		<div class="flex items-center gap-2">
 			{#if healthStatus === "ok"}
 				<Badge variant="outline" class="gap-1.5">
 					<span class="relative flex size-2">
@@ -145,27 +154,24 @@
 							class="relative inline-flex size-2 rounded-full bg-emerald-500"
 						></span>
 					</span>
-					API Online
+					Online
 				</Badge>
 			{:else if loading}
 				<Badge variant="outline" class="gap-1.5">
-					<Spinner />
+					<Spinner class="size-3" />
 					Connecting…
 				</Badge>
 			{:else}
 				<Badge variant="destructive" class="gap-1.5">
-					<AlertCircleIcon
-						data-icon="inline-start"
-						class="size-3.5"
-					/>
+					<AlertCircleIcon class="size-3.5" />
 					Offline
 				</Badge>
 			{/if}
-			<Button variant="outline" size="icon" onclick={() => loadData()}>
+			<Button variant="outline" size="icon" onclick={loadData}>
 				<RefreshCwIcon class="size-4" />
 			</Button>
 		</div>
-	</header>
+	</div>
 
 	<!-- ── Error Banner ──────────────────────────────────────────── -->
 	{#if error}
@@ -179,106 +185,117 @@
 	{/if}
 
 	<!-- ── Stats Cards ──────────────────────────────────────────── -->
-	<div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-		{#if loading}
-			{#each Array(4) as _}
-				<Card.Root>
+	{#if loading}
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+			{#each Array(3) as _}
+				<Card.Root size="sm">
 					<Card.Header>
 						<Skeleton class="mb-2 h-4 w-20" />
 						<Skeleton class="h-8 w-16" />
 					</Card.Header>
 				</Card.Root>
 			{/each}
-		{:else}
-			<Card.Root>
-				<Card.Header>
-					<Card.Description class="flex items-center gap-2 text-sm">
-						<CuboidIcon class="size-4" />
-						Models
-					</Card.Description>
-					<Card.Title class="text-3xl font-bold tabular-nums">
-						{systemInfo?.models_count ?? "?"}
-					</Card.Title>
-				</Card.Header>
-			</Card.Root>
-
-			<Card.Root>
-				<Card.Header>
-					<Card.Description class="flex items-center gap-2 text-sm">
-						<DatabaseIcon class="size-4" />
-						Storage
-					</Card.Description>
-					<Card.Title class="text-xl font-bold tabular-nums">
-						{systemInfo?.storage_used ?? "?"}
-						<span
-							class="text-base font-normal text-muted-foreground"
-						>
-							/ {systemInfo?.storage_free ?? "?"}
-						</span>
-					</Card.Title>
-				</Card.Header>
-			</Card.Root>
-
-			<Card.Root>
-				<Card.Header>
-					<Card.Description class="flex items-center gap-2 text-sm">
-						<CpuIcon class="size-4" />
-						llama.cpp
-					</Card.Description>
-					<Card.Title
-						class="flex items-center gap-2 text-base font-bold"
+		</div>
+	{:else}
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+			<Card.Root size="sm">
+				<Card.Header
+					class="flex-row items-center justify-between gap-3"
+				>
+					<div>
+						<Card.Description>Installed Models</Card.Description>
+						<Card.Title class="mt-1 text-2xl tabular-nums">
+							{installedCount}
+						</Card.Title>
+					</div>
+					<div
+						class="flex size-10 items-center justify-center rounded-lg bg-primary/10"
 					>
-						{#if healthStatus === "ok"}
-							<span class="relative flex size-2">
-								<span
-									class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
-								></span>
-								<span
-									class="relative inline-flex size-2 rounded-full bg-emerald-500"
-								></span>
-							</span>
-							Running
-						{:else}
-							<span class="size-2 rounded-full bg-destructive"
-							></span>
-							Offline
-						{/if}
-					</Card.Title>
+						<CuboidIcon class="size-5 text-primary" />
+					</div>
 				</Card.Header>
 			</Card.Root>
-		{/if}
-	</div>
+
+			<Card.Root size="sm">
+				<Card.Header
+					class="flex-row items-center justify-between gap-3"
+				>
+					<div>
+						<Card.Description>Storage Used</Card.Description>
+						<Card.Title class="mt-1 text-2xl tabular-nums">
+							{systemInfo?.storage_used ?? "—"}
+						</Card.Title>
+					</div>
+					<div
+						class="flex size-10 items-center justify-center rounded-lg bg-primary/10"
+					>
+						<DatabaseIcon class="size-5 text-primary" />
+					</div>
+				</Card.Header>
+			</Card.Root>
+
+			<Card.Root size="sm">
+				<Card.Header
+					class="flex-row items-center justify-between gap-3"
+				>
+					<div>
+						<Card.Description>API Status</Card.Description>
+						<Card.Title
+							class="mt-1 flex items-center gap-2 text-lg"
+						>
+							{#if healthStatus === "ok"}
+								<span class="relative flex size-2">
+									<span
+										class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
+									></span>
+									<span
+										class="relative inline-flex size-2 rounded-full bg-emerald-500"
+									></span>
+								</span>
+								Running
+							{:else}
+								<span class="size-2 rounded-full bg-destructive"
+								></span>
+								Offline
+							{/if}
+						</Card.Title>
+					</div>
+					<div
+						class="flex size-10 items-center justify-center rounded-lg bg-primary/10"
+					>
+						<ActivityIcon class="size-5 text-primary" />
+					</div>
+				</Card.Header>
+			</Card.Root>
+		</div>
+	{/if}
 
 	<!-- ── Search Bar ────────────────────────────────────────────── -->
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Search HuggingFace</Card.Title>
-			<Card.Description>
-				Find and install GGUF models from the HuggingFace Hub.
-			</Card.Description>
-		</Card.Header>
+	<Card.Root size="sm">
 		<Card.Content>
 			<form
-				class="flex gap-2"
+				class="flex gap-3"
 				onsubmit={(e) => {
 					e.preventDefault();
 					if (searchQuery.trim()) {
-						window.location.href = `/search?q=${encodeURIComponent(searchQuery.trim())}`;
+						goto(
+							`/search?q=${encodeURIComponent(searchQuery.trim())}`,
+						);
 					}
 				}}
 			>
 				<div class="relative flex-1">
 					<SearchIcon
-						class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+						class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50"
 					/>
 					<Input
 						bind:value={searchQuery}
-						placeholder="e.g. gemma, llama, nomic-embed…"
+						placeholder="Search HuggingFace for GGUF models…"
 						class="pl-9"
 					/>
 				</div>
 				<Button type="submit" disabled={!searchQuery.trim()}>
-					<SearchIcon data-icon="inline-start" class="size-4" />
+					<SearchIcon class="size-4" />
 					Search
 				</Button>
 			</form>
@@ -328,10 +345,14 @@
 								<Table.Cell class="font-medium">
 									{m.name}
 								</Table.Cell>
-								<Table.Cell
-									class="capitalize text-muted-foreground"
-								>
-									{m.type}
+								<Table.Cell>
+									<span
+										class="inline-block rounded-md px-2.5 py-1 text-xs font-medium capitalize {typeColor(
+											m.type,
+										)}"
+									>
+										{m.type}
+									</span>
 								</Table.Cell>
 								<Table.Cell
 									class="tabular-nums text-muted-foreground"
@@ -339,17 +360,33 @@
 									{m.size}
 								</Table.Cell>
 								<Table.Cell>
-									{#if m.status === "installed"}
-										<Badge variant="secondary"
-											>Installed</Badge
+									{#if m.status === "installed" || m.status === "active"}
+										<span
+											class="inline-flex items-center gap-1.5"
 										>
-									{:else if m.status === "active"}
-										<Badge>Active</Badge>
+											<span class="relative flex size-2">
+												<span
+													class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"
+												></span>
+												<span
+													class="relative inline-flex size-2 rounded-full bg-emerald-500"
+												></span>
+											</span>
+											<span
+												class="text-sm font-medium text-emerald-500"
+											>
+												{m.status === "active"
+													? "Active"
+													: "Installed"}
+											</span>
+										</span>
 									{:else if m.status === "downloading"}
-										<Badge variant="outline" class="gap-1">
+										<span
+											class="inline-flex items-center gap-1 text-sm text-muted-foreground"
+										>
 											<Spinner class="size-3" />
 											Downloading
-										</Badge>
+										</span>
 									{:else if m.status === "error"}
 										<Badge variant="destructive"
 											>Error</Badge
@@ -363,9 +400,9 @@
 								<Table.Cell class="text-right">
 									<div class="flex justify-end gap-1">
 										<Button
-											variant="outline"
+											variant="ghost"
 											size="sm"
-											class="text-destructive hover:text-destructive"
+											class="text-destructive/70 hover:text-destructive"
 											onclick={() => {
 												if (
 													confirm(
@@ -394,12 +431,10 @@
 	</Card.Root>
 
 	<!-- ── Footer ────────────────────────────────────────────────── -->
-	<footer
-		class="flex items-center justify-between text-xs text-muted-foreground"
-	>
-		<p>modelctl {systemInfo?.version ?? "—"}</p>
-		<Separator class="mx-3 h-4" decorative orientation="vertical" />
-		<p>
+	<footer class="flex items-center gap-3 text-xs text-muted-foreground">
+		<span>modelctl {systemInfo?.version ?? "—"}</span>
+		<span class="text-muted-foreground/30">&middot;</span>
+		<span>
 			{new Date().toLocaleDateString("en-US", {
 				year: "numeric",
 				month: "short",
@@ -407,6 +442,6 @@
 				hour: "2-digit",
 				minute: "2-digit",
 			})}
-		</p>
+		</span>
 	</footer>
 </div>

@@ -16,8 +16,9 @@
     import TerminalIcon from "@lucide/svelte/icons/terminal";
     import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
     import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
+    import ActivityIcon from "@lucide/svelte/icons/activity";
     import {
-        state as ui,
+        ui,
         capabilities,
         loadContainers,
         startContainer,
@@ -31,6 +32,27 @@
         capabilityColor,
     } from "./containers.svelte";
 
+    // ── Derived ──────────────────────────────────────────────────────
+
+    let runningCount = $derived(
+        ui.containers.filter((c) => c.status === "running").length,
+    );
+    let stoppedCount = $derived(
+        ui.containers.filter(
+            (c) => c.status === "stopped" || c.status === "failed",
+        ).length,
+    );
+    let totalCount = $derived(ui.containers.length);
+
+    let isPolling = $derived(
+        ui.containers.some(
+            (c) =>
+                c.status === "starting" ||
+                c.status === "stopping" ||
+                c.status === "running",
+        ),
+    );
+
     let pollingInterval = $state<ReturnType<typeof setInterval> | null>(null);
 
     onMount(() => {
@@ -39,15 +61,9 @@
 
     // Auto-poll while there are non-terminal containers
     $effect(() => {
-        const hasActive = ui.containers.some(
-            (c) =>
-                c.status === "starting" ||
-                c.status === "stopping" ||
-                c.status === "running",
-        );
-        if (hasActive && !pollingInterval) {
+        if (isPolling && !pollingInterval) {
             pollingInterval = setInterval(loadContainers, 3000);
-        } else if (!hasActive && pollingInterval) {
+        } else if (!isPolling && pollingInterval) {
             clearInterval(pollingInterval);
             pollingInterval = null;
         }
@@ -62,7 +78,7 @@
     <title>Containers — modelctl</title>
 </svelte:head>
 
-<div class="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+<div class="mx-auto flex w-full flex-col gap-6 p-6">
     <!-- ── Header ──────────────────────────────────────────── -->
     <div class="flex items-center justify-between">
         <div>
@@ -72,13 +88,13 @@
             </p>
         </div>
         <div class="flex items-center gap-2">
-            {#if pollingInterval}
+            {#if isPolling}
                 <Badge variant="outline" class="gap-1">
                     <Spinner class="size-3" />
                     Live
                 </Badge>
             {/if}
-            <Button variant="outline" onclick={loadContainers}>
+            <Button variant="outline" size="icon" onclick={loadContainers}>
                 <RefreshCwIcon class="size-4" />
             </Button>
             <Button onclick={openStartSheet}>
@@ -90,6 +106,16 @@
 
     <!-- ── Loading ─────────────────────────────────────────── -->
     {#if ui.loading}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {#each Array(3) as _}
+                <Card.Root size="sm">
+                    <Card.Header>
+                        <Skeleton class="mb-2 h-4 w-20" />
+                        <Skeleton class="h-8 w-16" />
+                    </Card.Header>
+                </Card.Root>
+            {/each}
+        </div>
         <div class="flex flex-col gap-3">
             {#each Array(3) as _}
                 <Skeleton class="h-14 w-full" />
@@ -129,6 +155,65 @@
 
         <!-- ── Container Table ─────────────────────────────────── -->
     {:else}
+        <!-- ── Stat Cards ──────────────────────────────────── -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card.Root size="sm">
+                <Card.Header
+                    class="flex-row items-center justify-between gap-3"
+                >
+                    <div>
+                        <Card.Description>Running</Card.Description>
+                        <Card.Title class="mt-1 text-2xl tabular-nums">
+                            {runningCount}
+                        </Card.Title>
+                    </div>
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-emerald-500/15"
+                    >
+                        <ActivityIcon
+                            class="size-5 text-emerald-600 dark:text-emerald-400"
+                        />
+                    </div>
+                </Card.Header>
+            </Card.Root>
+
+            <Card.Root size="sm">
+                <Card.Header
+                    class="flex-row items-center justify-between gap-3"
+                >
+                    <div>
+                        <Card.Description>Stopped</Card.Description>
+                        <Card.Title class="mt-1 text-2xl tabular-nums">
+                            {stoppedCount}
+                        </Card.Title>
+                    </div>
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-muted"
+                    >
+                        <SquareIcon class="size-5 text-muted-foreground" />
+                    </div>
+                </Card.Header>
+            </Card.Root>
+
+            <Card.Root size="sm">
+                <Card.Header
+                    class="flex-row items-center justify-between gap-3"
+                >
+                    <div>
+                        <Card.Description>Total</Card.Description>
+                        <Card.Title class="mt-1 text-2xl tabular-nums">
+                            {totalCount}
+                        </Card.Title>
+                    </div>
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-primary/10"
+                    >
+                        <BoxIcon class="size-5 text-primary" />
+                    </div>
+                </Card.Header>
+            </Card.Root>
+        </div>
+
         <Card.Root>
             <Card.Content class="p-0">
                 <Table.Root>
@@ -155,7 +240,7 @@
                                 </Table.Cell>
                                 <Table.Cell>
                                     <span
-                                        class="inline-block rounded px-2 py-0.5 text-xs font-medium {capabilityColor(
+                                        class="inline-block rounded-md px-2.5 py-1 text-xs font-medium {capabilityColor(
                                             c.capability,
                                         )}"
                                     >
@@ -163,7 +248,7 @@
                                     </span>
                                 </Table.Cell>
                                 <Table.Cell
-                                    class="font-medium max-w-[200px] truncate"
+                                    class="font-medium max-w-50 truncate"
                                     >{c.model_name}</Table.Cell
                                 >
                                 <Table.Cell
@@ -264,174 +349,198 @@
 >
     <Sheet.Portal>
         <Sheet.Overlay />
-        <Sheet.Content side="right" class="w-full sm:max-w-md">
-            <Sheet.Header>
-                <Sheet.Title>Start Container</Sheet.Title>
-                <Sheet.Description>
-                    Launch a new inference container for an installed model.
-                </Sheet.Description>
-            </Sheet.Header>
-
-            <div class="flex flex-col gap-4 px-6 py-4">
-                {#if ui.startError}
-                    <Card.Root class="border-destructive/50 bg-destructive/10">
-                        <Card.Content class="flex items-start gap-2 text-sm">
-                            <AlertCircleIcon
-                                class="mt-0.5 size-4 shrink-0 text-destructive"
-                            />
-                            <span>{ui.startError}</span>
-                        </Card.Content>
-                    </Card.Root>
-                {/if}
-
-                <!-- Model -->
-                <div class="flex flex-col gap-1.5">
-                    <label for="model" class="text-sm font-medium">
-                        Model <span class="text-destructive">*</span>
-                    </label>
-                    {#if ui.modelsLoading}
-                        <div
-                            class="flex items-center gap-2 text-sm text-muted-foreground"
-                        >
-                            <Spinner class="size-3" />
-                            Loading models…
-                        </div>
-                    {:else if ui.availableModels.length === 0}
-                        <Card.Root class="border-muted">
-                            <Card.Content
-                                class="text-sm text-muted-foreground py-3"
-                            >
-                                No installed models available.
-                                <a href="/search" class="underline"
-                                    >Search &amp; install</a
-                                > one first.
-                            </Card.Content>
-                        </Card.Root>
-                    {:else}
-                        <select
-                            id="model"
-                            value={ui.selectedModelId}
-                            onchange={(e) =>
-                                (ui.selectedModelId = (
-                                    e.currentTarget as HTMLSelectElement
-                                ).value)}
-                            class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="" disabled>Select a model…</option>
-                            {#each ui.availableModels as m (m.id)}
-                                <option value={m.id}>
-                                    {m.name} ({m.type})
-                                </option>
-                            {/each}
-                        </select>
-                    {/if}
-                </div>
-
-                <!-- Capability -->
-                <div class="flex flex-col gap-1.5">
-                    <label for="capability" class="text-sm font-medium">
-                        Capability
-                    </label>
-                    <select
-                        id="capability"
-                        value={ui.selectedCapability}
-                        onchange={(e) =>
-                            (ui.selectedCapability = (
-                                e.currentTarget as HTMLSelectElement
-                            ).value)}
-                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        {#each capabilities as cap}
-                            <option value={cap}>{cap}</option>
-                        {/each}
-                    </select>
-                </div>
-
-                <Separator />
-
-                <!-- Resource Profile (optional) -->
-                <p class="text-xs text-muted-foreground">
-                    Resource overrides (leave blank for defaults).
-                </p>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="flex flex-col gap-1.5">
-                        <label for="memory" class="text-xs font-medium">
-                            Memory
-                        </label>
-                        <Input
-                            id="memory"
-                            value={ui.memoryLimit}
-                            oninput={(e) =>
-                                (ui.memoryLimit = (
-                                    e.currentTarget as HTMLInputElement
-                                ).value)}
-                            placeholder="e.g. 8g"
-                        />
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <label for="cpu" class="text-xs font-medium">
-                            CPU count
-                        </label>
-                        <Input
-                            id="cpu"
-                            type="number"
-                            value={ui.cpuCount}
-                            oninput={(e) =>
-                                (ui.cpuCount = (
-                                    e.currentTarget as HTMLInputElement
-                                ).value)}
-                            placeholder="e.g. 4"
-                        />
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <label for="gpu-device" class="text-xs font-medium">
-                            GPU device
-                        </label>
-                        <Input
-                            id="gpu-device"
-                            value={ui.gpuDevice}
-                            oninput={(e) =>
-                                (ui.gpuDevice = (
-                                    e.currentTarget as HTMLInputElement
-                                ).value)}
-                            placeholder="e.g. 0"
-                        />
-                    </div>
-                    <div class="flex flex-col gap-1.5">
-                        <label for="gpu-count" class="text-xs font-medium">
-                            GPU count
-                        </label>
-                        <Input
-                            id="gpu-count"
-                            type="number"
-                            value={ui.gpuCount}
-                            oninput={(e) =>
-                                (ui.gpuCount = (
-                                    e.currentTarget as HTMLInputElement
-                                ).value)}
-                            placeholder="e.g. 1"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <Sheet.Footer class="px-6 pb-6">
-                <Button
-                    class="w-full"
-                    onclick={startContainer}
-                    disabled={!ui.selectedModelId ||
-                        ui.startLoading ||
-                        ui.availableModels.length === 0}
+        <Sheet.Content side="right" class="w-full sm:max-w-2xl! p-0">
+            <div class="flex h-full flex-col">
+                <div
+                    class="flex items-start justify-between gap-3 border-b px-6 py-4"
                 >
-                    {#if ui.startLoading}
-                        <Spinner class="size-4" />
-                    {:else}
-                        <PlayIcon class="size-4" />
-                    {/if}
-                    Start Container
-                </Button>
-            </Sheet.Footer>
+                    <div>
+                        <Sheet.Title class="text-lg font-semibold">
+                            Start Container
+                        </Sheet.Title>
+                        <Sheet.Description class="text-xs">
+                            Launch a new inference container for an installed
+                            model.
+                        </Sheet.Description>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto px-6 py-4">
+                    <div class="flex flex-col gap-5">
+                        {#if ui.startError}
+                            <Card.Root
+                                class="border-destructive/50 bg-destructive/10"
+                            >
+                                <Card.Content
+                                    class="flex items-start gap-2 py-3 text-sm"
+                                >
+                                    <AlertCircleIcon
+                                        class="mt-0.5 size-4 shrink-0 text-destructive"
+                                    />
+                                    <span>{ui.startError}</span>
+                                </Card.Content>
+                            </Card.Root>
+                        {/if}
+
+                        <!-- Model -->
+                        <div class="flex flex-col gap-1.5">
+                            <label for="model" class="text-sm font-medium">
+                                Model
+                                <span class="text-destructive">*</span>
+                            </label>
+                            {#if ui.modelsLoading}
+                                <div
+                                    class="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+                                >
+                                    <Spinner class="size-3" />
+                                    Loading models…
+                                </div>
+                            {:else if ui.availableModels.length === 0}
+                                <div
+                                    class="rounded-lg border border-dashed bg-muted/20 px-3 py-3 text-sm text-muted-foreground"
+                                >
+                                    No installed models available.
+                                    <a href="/search" class="underline"
+                                        >Search &amp; install</a
+                                    >
+                                    one first.
+                                </div>
+                            {:else}
+                                <select
+                                    id="model"
+                                    bind:value={ui.selectedModelId}
+                                    class="border-input bg-background text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-3"
+                                >
+                                    <option value="" disabled
+                                        >Select a model…</option
+                                    >
+                                    {#each ui.availableModels as m (m.id)}
+                                        <option value={m.id}>
+                                            {m.name} ({m.type})
+                                        </option>
+                                    {/each}
+                                </select>
+                            {/if}
+                        </div>
+
+                        <!-- Capability -->
+                        <div class="flex flex-col gap-1.5">
+                            <label for="capability" class="text-sm font-medium">
+                                Capability
+                            </label>
+                            <div class="flex gap-2">
+                                {#each capabilities as cap}
+                                    <button
+                                        type="button"
+                                        onclick={() =>
+                                            (ui.selectedCapability = cap)}
+                                        class="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-all {ui.selectedCapability ===
+                                        cap
+                                            ? capabilityColor(cap) +
+                                              ' ring-1 ring-sidebar-ring'
+                                            : 'bg-muted/50 text-muted-foreground hover:bg-muted'}"
+                                    >
+                                        {cap}
+                                    </button>
+                                {/each}
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <!-- Resource Profile (optional) -->
+                        <div>
+                            <p
+                                class="mb-3 text-xs font-medium text-muted-foreground"
+                            >
+                                Resource overrides
+                                <span
+                                    class="font-normal text-muted-foreground/60"
+                                    >(leave blank for defaults)</span
+                                >
+                            </p>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="flex flex-col gap-1.5">
+                                    <label
+                                        for="memory"
+                                        class="text-xs font-medium"
+                                    >
+                                        Memory
+                                    </label>
+                                    <Input
+                                        id="memory"
+                                        bind:value={ui.memoryLimit}
+                                        placeholder="e.g. 8g"
+                                        class="h-9"
+                                    />
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label
+                                        for="cpu"
+                                        class="text-xs font-medium"
+                                    >
+                                        CPU count
+                                    </label>
+                                    <Input
+                                        id="cpu"
+                                        type="number"
+                                        bind:value={ui.cpuCount}
+                                        placeholder="e.g. 4"
+                                        class="h-9"
+                                    />
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label
+                                        for="gpu-device"
+                                        class="text-xs font-medium"
+                                    >
+                                        GPU device
+                                    </label>
+                                    <Input
+                                        id="gpu-device"
+                                        bind:value={ui.gpuDevice}
+                                        placeholder="e.g. 0"
+                                        class="h-9"
+                                    />
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <label
+                                        for="gpu-count"
+                                        class="text-xs font-medium"
+                                    >
+                                        GPU count
+                                    </label>
+                                    <Input
+                                        id="gpu-count"
+                                        type="number"
+                                        bind:value={ui.gpuCount}
+                                        placeholder="e.g. 1"
+                                        class="h-9"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <Sheet.Footer class="border-t px-6 py-4">
+                    <Button
+                        class="w-full"
+                        onclick={startContainer}
+                        disabled={!ui.selectedModelId ||
+                            ui.startLoading ||
+                            ui.availableModels.length === 0}
+                    >
+                        {#if ui.startLoading}
+                            <Spinner class="size-4" />
+                        {:else}
+                            <PlayIcon class="size-4" />
+                        {/if}
+                        Start Container
+                    </Button>
+                </Sheet.Footer>
+            </div>
         </Sheet.Content>
     </Sheet.Portal>
 </Sheet.Root>
@@ -445,38 +554,90 @@
 >
     <Sheet.Portal>
         <Sheet.Overlay />
-        <Sheet.Content side="right" class="w-full sm:max-w-lg">
-            <Sheet.Header>
-                <Sheet.Title>
-                    Logs — {ui.logsContainerName}
-                </Sheet.Title>
-                <Sheet.Description>
-                    Container <code class="rounded border bg-muted px-1 text-xs"
-                        >{shortId(ui.logsContainerId)}</code
-                    >
-                </Sheet.Description>
-            </Sheet.Header>
-
-            <div class="px-6 py-4">
-                {#if ui.logsLoading}
-                    <div class="flex items-center justify-center py-10">
-                        <Spinner class="size-6" />
-                    </div>
-                {:else}
-                    <pre
-                        class="max-h-[60vh] overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono whitespace-pre-wrap break-all">{ui.logsContent}</pre>
-                {/if}
-            </div>
-
-            <Sheet.Footer class="px-6 pb-6">
-                <Button
-                    variant="outline"
-                    class="w-full"
-                    onclick={() => (ui.logsSheetOpen = false)}
+        <Sheet.Content side="right" class="w-full sm:max-w-2xl! p-0">
+            <div class="flex h-full flex-col">
+                <div
+                    class="flex items-start justify-between gap-3 border-b px-6 py-4"
                 >
-                    Close
-                </Button>
-            </Sheet.Footer>
+                    <div class="min-w-0 flex-1">
+                        <Sheet.Title class="truncate text-lg font-semibold">
+                            Logs — {ui.logsContainerName}
+                        </Sheet.Title>
+                        <Sheet.Description
+                            class="flex items-center gap-1.5 text-xs"
+                        >
+                            Container
+                            <code
+                                class="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono"
+                            >
+                                {shortId(ui.logsContainerId)}
+                            </code>
+                            {#if ui.logsContent}
+                                <span class="text-muted-foreground/50"
+                                    >&middot;</span
+                                >
+                                <span class="tabular-nums">
+                                    {ui.logsContent.split("\n").length} lines
+                                </span>
+                            {/if}
+                        </Sheet.Description>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto px-6 py-4">
+                    {#if ui.logsLoading}
+                        <div class="flex flex-col gap-3">
+                            <Skeleton class="h-4 w-full" />
+                            <Skeleton class="h-4 w-11/12" />
+                            <Skeleton class="h-4 w-4/5" />
+                            <Skeleton class="h-4 w-3/4" />
+                            <Skeleton class="h-4 w-5/6" />
+                        </div>
+                    {:else if !ui.logsContent}
+                        <div
+                            class="flex flex-col items-center gap-2 py-10 text-center"
+                        >
+                            <TerminalIcon
+                                class="size-8 text-muted-foreground/40"
+                            />
+                            <p class="text-sm text-muted-foreground">
+                                No logs available.
+                            </p>
+                        </div>
+                    {:else}
+                        <div
+                            class="max-h-[65vh] overflow-auto rounded-lg border bg-muted/30 p-0"
+                        >
+                            {#each ui.logsContent.split("\n") as line, i}
+                                <div
+                                    class="flex border-b border-muted/50 last:border-b-0 hover:bg-muted/40"
+                                >
+                                    <span
+                                        class="min-w-12 select-none border-r border-muted/50 px-2 py-0.5 text-[10px] leading-relaxed text-muted-foreground/40 tabular-nums text-right"
+                                    >
+                                        {i + 1}
+                                    </span>
+                                    <span
+                                        class="flex-1 px-2 py-0.5 text-xs leading-relaxed font-mono whitespace-pre-wrap break-all text-foreground/80"
+                                    >
+                                        {line || String.fromCharCode(160)}
+                                    </span>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
+
+                <Sheet.Footer class="border-t px-6 py-4">
+                    <Button
+                        variant="outline"
+                        class="w-full"
+                        onclick={() => (ui.logsSheetOpen = false)}
+                    >
+                        Close
+                    </Button>
+                </Sheet.Footer>
+            </div>
         </Sheet.Content>
     </Sheet.Portal>
 </Sheet.Root>
