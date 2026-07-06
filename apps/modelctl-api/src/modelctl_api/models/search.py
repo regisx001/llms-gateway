@@ -19,6 +19,11 @@ class SearchResults(BaseModel):
     total: int
 
 
+class GGUFFile(BaseModel):
+    filename: str
+    size: int = 0
+
+
 class InspectResponse(BaseModel):
     repo_id: str
     type: str
@@ -28,5 +33,5 @@ class InspectResponse(BaseModel):
     license: str
     pipeline_tag: str
     library_name: str
-    gguf_files: list[str]
+    gguf_files: list[GGUFFile]
     total_files: int

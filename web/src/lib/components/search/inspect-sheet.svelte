@@ -6,14 +6,21 @@
     import { Skeleton } from "$lib/components/ui/skeleton";
     import { Separator } from "$lib/components/ui/separator";
     import * as Sheet from "$lib/components/ui/sheet";
+    import * as Card from "$lib/components/ui/card";
     import XIcon from "@lucide/svelte/icons/x";
     import DownloadIcon from "@lucide/svelte/icons/download";
     import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
     import CuboidIcon from "@lucide/svelte/icons/cuboid";
     import ThumbsUpIcon from "@lucide/svelte/icons/thumbs-up";
     import ScaleIcon from "@lucide/svelte/icons/scale";
+    import StarIcon from "@lucide/svelte/icons/star";
     import { cn } from "$lib/utils";
     import { startDownload } from "$lib/stores/downloads.svelte";
+
+    interface GgufFile {
+        filename: string;
+        size: number;
+    }
 
     interface InspectData {
         repo_id: string;
@@ -24,7 +31,7 @@
         license: string;
         pipeline_tag: string;
         library_name: string;
-        gguf_files: string[];
+        gguf_files: GgufFile[];
         total_files: number;
     }
 
@@ -42,12 +49,23 @@
     let inspectData = $state<InspectData | null>(null);
     let inspectError = $state<string | null>(null);
     let installError = $state<string | null>(null);
+    let installingFile = $state<string | null>(null);
 
     // Derived
     let title = $derived(inspectData?.repo_id ?? repoId);
     let displayName = $derived(title.split("/").pop() ?? title);
 
     // ── Helpers ─────────────────────────────────────────────────
+
+    function typeColor(type: string): string {
+        const colors: Record<string, string> = {
+            chat: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+            embedding: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+            reranker: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+            vision: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        };
+        return colors[type] ?? "bg-muted text-muted-foreground";
+    }
 
     function formatSize(bytes: number): string {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -70,23 +88,6 @@
         // Q4_K_M is the best balance of quality/size for most models
         const m = filename.match(/Q4[._]K[._]M/i);
         return m !== null;
-    }
-
-    function typeBadgeVariant(
-        type: string,
-    ): "default" | "secondary" | "outline" | "destructive" {
-        switch (type) {
-            case "chat":
-                return "default";
-            case "embedding":
-                return "secondary";
-            case "vision":
-                return "outline";
-            case "reranker":
-                return "destructive";
-            default:
-                return "outline";
-        }
     }
 
     // ── Inspect ─────────────────────────────────────────────────
@@ -118,6 +119,7 @@
 
     async function installFile(filename: string) {
         installError = null;
+        installingFile = filename;
 
         try {
             // Fire async install — returns immediately with 202
@@ -154,6 +156,8 @@
         } catch (e) {
             installError = e instanceof Error ? e.message : "Install failed";
             phase = "error";
+        } finally {
+            installingFile = null;
         }
     }
 
@@ -178,22 +182,31 @@
 </script>
 
 <Sheet.Root bind:open>
-    <Sheet.Content side="right" class="w-full max-w-lg sm:max-w-xl p-0">
+    <Sheet.Content side="right" class="w-full sm:max-w-4xl! p-0">
         <div class="flex h-full flex-col">
             <!-- ── Header ───────────────────────────────────── -->
-            <div class="flex items-center justify-between border-b px-6 py-4">
-                <Sheet.Title class="text-lg font-semibold">
-                    {#if phase === "loading"}
-                        Loading…
-                    {:else if phase === "error" && !inspectData}
-                        Error
-                    {:else}
-                        {displayName}
+            <div
+                class="flex items-start justify-between gap-3 border-b px-6 py-4"
+            >
+                <div class="min-w-0 flex-1">
+                    <Sheet.Title class="truncate text-lg font-semibold">
+                        {#if phase === "loading"}
+                            Loading…
+                        {:else if phase === "error" && !inspectData}
+                            Error
+                        {:else}
+                            {displayName}
+                        {/if}
+                    </Sheet.Title>
+                    {#if phase === "inspect" && inspectData}
+                        <p class="truncate text-xs text-muted-foreground">
+                            {inspectData.repo_id}
+                        </p>
                     {/if}
-                </Sheet.Title>
-                <Sheet.Close onclick={handleClose}>
+                </div>
+                <!-- <Sheet.Close onclick={handleClose}>
                     <XIcon class="size-4" />
-                </Sheet.Close>
+                </Sheet.Close> -->
             </div>
 
             <!-- ── Body ─────────────────────────────────────── -->
@@ -201,60 +214,115 @@
                 {#if phase === "loading"}
                     <!-- Loading skeleton -->
                     <div class="flex flex-col gap-4">
-                        <Skeleton class="h-5 w-48" />
+                        <div class="flex gap-2">
+                            <Skeleton class="h-6 w-16" />
+                            <Skeleton class="h-6 w-24" />
+                            <Skeleton class="h-6 w-20" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-3">
+                            <Skeleton class="h-20 w-full" />
+                            <Skeleton class="h-20 w-full" />
+                            <Skeleton class="h-20 w-full" />
+                            <Skeleton class="h-20 w-full" />
+                        </div>
                         <Skeleton class="h-4 w-full" />
                         <Skeleton class="h-4 w-3/4" />
-                        <div class="mt-4 flex flex-col gap-2">
-                            {#each Array(5) as _}
-                                <Skeleton class="h-16 w-full" />
-                            {/each}
-                        </div>
+                        <Separator />
+                        <Skeleton class="h-5 w-48" />
+                        {#each Array(4) as _}
+                            <Skeleton class="h-16 w-full" />
+                        {/each}
                     </div>
                 {:else if phase === "inspect" && inspectData}
                     <!-- Repo info -->
                     <div class="flex flex-col gap-4">
-                        <!-- Badges row -->
-                        <div class="flex flex-wrap gap-2">
-                            <Badge variant={typeBadgeVariant(inspectData.type)}>
-                                {inspectData.type}
-                            </Badge>
-                            {#if inspectData.pipeline_tag}
-                                <Badge variant="outline"
-                                    >{inspectData.pipeline_tag}</Badge
+                        <!-- Badges + Stats row: compact card -->
+                        <div class="rounded-lg border bg-card p-4">
+                            <!-- Badges -->
+                            <div class="flex flex-wrap gap-1.5">
+                                <span
+                                    class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize {typeColor(
+                                        inspectData.type,
+                                    )}"
                                 >
-                            {/if}
-                            {#if inspectData.library_name}
-                                <Badge variant="outline"
-                                    >{inspectData.library_name}</Badge
-                                >
-                            {/if}
-                        </div>
-
-                        <!-- Stats row -->
-                        <div
-                            class="flex flex-wrap gap-4 text-sm text-muted-foreground"
-                        >
-                            <span class="flex items-center gap-1.5">
-                                <DownloadIcon class="size-3.5" />
-                                {inspectData.downloads.toLocaleString()}
-                            </span>
-                            <span class="flex items-center gap-1.5">
-                                <ThumbsUpIcon class="size-3.5" />
-                                {inspectData.likes.toLocaleString()}
-                            </span>
-                            {#if inspectData.license}
-                                <span class="flex items-center gap-1.5">
-                                    <ScaleIcon class="size-3.5" />
-                                    {inspectData.license}
+                                    {inspectData.type}
                                 </span>
-                            {/if}
+                                {#if inspectData.pipeline_tag}
+                                    <Badge
+                                        variant="outline"
+                                        class="text-[11px]"
+                                    >
+                                        {inspectData.pipeline_tag}
+                                    </Badge>
+                                {/if}
+                                {#if inspectData.library_name}
+                                    <Badge
+                                        variant="outline"
+                                        class="text-[11px]"
+                                    >
+                                        {inspectData.library_name}
+                                    </Badge>
+                                {/if}
+                            </div>
+
+                            <!-- Stats grid -->
+                            <div class="mt-4 grid grid-cols-4 gap-3">
+                                <div
+                                    class="flex flex-col items-center rounded-md bg-muted/50 py-2"
+                                >
+                                    <span class="text-xs text-muted-foreground"
+                                        >Downloads</span
+                                    >
+                                    <span
+                                        class="mt-0.5 text-sm font-semibold tabular-nums"
+                                    >
+                                        {inspectData.downloads.toLocaleString()}
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex flex-col items-center rounded-md bg-muted/50 py-2"
+                                >
+                                    <span class="text-xs text-muted-foreground"
+                                        >Likes</span
+                                    >
+                                    <span
+                                        class="mt-0.5 text-sm font-semibold tabular-nums"
+                                    >
+                                        {inspectData.likes.toLocaleString()}
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex flex-col items-center rounded-md bg-muted/50 py-2"
+                                >
+                                    <span class="text-xs text-muted-foreground"
+                                        >License</span
+                                    >
+                                    <span
+                                        class="mt-0.5 max-w-full truncate text-sm font-semibold"
+                                    >
+                                        {inspectData.license || "—"}
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex flex-col items-center rounded-md bg-muted/50 py-2"
+                                >
+                                    <span class="text-xs text-muted-foreground"
+                                        >Files</span
+                                    >
+                                    <span
+                                        class="mt-0.5 text-sm font-semibold tabular-nums"
+                                    >
+                                        {inspectData.total_files}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Description -->
                         {#if inspectData.description}
-                            <div class="rounded-lg bg-muted/50 p-3">
+                            <div class="rounded-lg bg-muted/30 p-3">
                                 <p
-                                    class="text-sm text-muted-foreground line-clamp-6"
+                                    class="text-sm leading-relaxed text-muted-foreground line-clamp-6"
                                 >
                                     {inspectData.description}
                                 </p>
@@ -265,12 +333,12 @@
 
                         <!-- Files section -->
                         <div>
-                            <p class="mb-3 text-sm font-medium">
-                                Available GGUF Files
-                                <span class="ml-1 text-muted-foreground">
-                                    ({inspectData.gguf_files.length})
-                                </span>
-                            </p>
+                            <div class="mb-3 flex items-center justify-between">
+                                <p class="text-sm font-medium">GGUF Files</p>
+                                <Badge variant="outline" class="text-[11px]">
+                                    {inspectData.gguf_files.length} available
+                                </Badge>
+                            </div>
 
                             {#if inspectData.gguf_files.length === 0}
                                 <div
@@ -286,41 +354,61 @@
                             {:else}
                                 <div class="flex flex-col gap-2">
                                     {#each inspectData.gguf_files as file}
+                                        {@const isObj =
+                                            typeof file === "object"}
+                                        {@const fileName = isObj
+                                            ? file.filename
+                                            : file}
+                                        {@const fileSize = isObj
+                                            ? file.size
+                                            : 0}
                                         {@const quant =
-                                            parseSizeFromFilename(file)}
+                                            parseSizeFromFilename(fileName)}
                                         {@const recommended =
-                                            isRecommended(file)}
+                                            isRecommended(fileName)}
+                                        {@const isInstalling =
+                                            installingFile === fileName}
                                         <div
                                             class={cn(
                                                 "flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50",
                                                 recommended &&
-                                                    "border-primary/50 bg-primary/5",
+                                                    "border-primary/40 bg-primary/5",
                                             )}
                                         >
                                             <div class="min-w-0 flex-1">
                                                 <p
                                                     class="truncate text-sm font-medium"
                                                 >
-                                                    {file}
+                                                    {fileName}
                                                 </p>
                                                 <div
-                                                    class="mt-0.5 flex items-center gap-2"
+                                                    class="mt-0.5 flex items-center gap-1.5"
                                                 >
                                                     {#if quant}
-                                                        <Badge
-                                                            variant="outline"
-                                                            class="px-1.5 py-0 text-[10px]"
+                                                        <span
+                                                            class="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground"
                                                         >
                                                             {quant}
-                                                        </Badge>
+                                                        </span>
+                                                    {/if}
+                                                    {#if fileSize > 0}
+                                                        <span
+                                                            class="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground"
+                                                        >
+                                                            {formatSize(
+                                                                fileSize,
+                                                            )}
+                                                        </span>
                                                     {/if}
                                                     {#if recommended}
-                                                        <Badge
-                                                            variant="default"
-                                                            class="px-1.5 py-0 text-[10px]"
+                                                        <span
+                                                            class="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
                                                         >
+                                                            <StarIcon
+                                                                class="size-2.5"
+                                                            />
                                                             Recommended
-                                                        </Badge>
+                                                        </span>
                                                     {/if}
                                                 </div>
                                             </div>
@@ -329,11 +417,20 @@
                                                     ? "default"
                                                     : "outline"}
                                                 size="sm"
+                                                disabled={isInstalling}
                                                 onclick={() =>
-                                                    installFile(file)}
+                                                    installFile(fileName)}
                                                 class="shrink-0"
                                             >
-                                                Install
+                                                {#if isInstalling}
+                                                    <Spinner class="size-3.5" />
+                                                    Installing…
+                                                {:else}
+                                                    <DownloadIcon
+                                                        class="size-3.5"
+                                                    />
+                                                    Install
+                                                {/if}
                                             </Button>
                                         </div>
                                     {/each}

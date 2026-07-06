@@ -118,7 +118,7 @@ class ModelService:
         if filename not in info["all_files"]:
             raise ModelctlError(
                 f"File '{filename}' not found in repository. "
-                f"Available GGUF files: {', '.join(info['gguf_files'])}"
+                f"Available GGUF files: {', '.join(f['filename'] for f in info['gguf_files'])}"
             )
 
         # Build model object and register immediately

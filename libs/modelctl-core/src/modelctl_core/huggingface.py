@@ -37,14 +37,18 @@ def _infer_type(repo_info: dict) -> str:
     return "experimental"
 
 
-def _filter_gguf_files(siblings: list[dict]) -> list[str]:
-    """Return only GGUF filenames, sorted by quantization size."""
-    files = [s["rfilename"]
-             for s in siblings if s["rfilename"].endswith(".gguf")]
+def _filter_gguf_files(siblings: list[dict]) -> list[dict]:
+    """Return GGUF files with filename and size, sorted by quantization."""
+    files = [
+        {"filename": s["rfilename"], "size": s.get("size", 0)}
+        for s in siblings
+        if s["rfilename"].endswith(".gguf")
+    ]
 
     def sort_key(f):
-        m = re.search(r"Q(\d+)", f, re.IGNORECASE)
+        m = re.search(r"Q(\d+)", f["filename"], re.IGNORECASE)
         return int(m.group(1)) if m else 99
+
     files.sort(key=sort_key)
     return files
 
@@ -69,7 +73,7 @@ def search(query: str, limit: int = 15) -> list[dict]:
 
 def inspect(repo_id: str) -> Optional[dict]:
     """Get detailed info about a repository including all files."""
-    url = f"{HF_API}/{repo_id}"
+    url = f"{HF_API}/{repo_id}?blobs=1"
     resp = requests.get(url, headers=_headers(), timeout=15)
     if resp.status_code == 404:
         return None

@@ -20,6 +20,7 @@ from modelctl_api.models.model import (
     ModelResponse,
 )
 from modelctl_api.models.search import (
+    GGUFFile,
     InspectResponse,
     SearchResult,
     SearchResults,
@@ -31,6 +32,7 @@ __all__ = [
     "ContainerListResponse",
     "ContainerLogsResponse",
     "ErrorResponse",
+    "GGUFFile",
     "HealthResponse",
     "InspectResponse",
     "InstallRequest",
