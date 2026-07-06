@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { page } from "$app/state";
-    import { config } from "$lib/config";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
@@ -12,48 +10,15 @@
     import ThumbsUpIcon from "@lucide/svelte/icons/thumbs-up";
 
     import InspectSheet from "$lib/components/search/inspect-sheet.svelte";
+    import { ui, typeColor, doSearch } from "./search.svelte";
 
-    let query = $state(page.url.searchParams.get("q") || "");
-    let results = $state<any[] | null>(null);
-    let loading = $state(false);
-    let error = $state<string | null>(null);
-
-    // Inspect sheet state
+    // Inspect sheet state (local — needs bind: with InspectSheet)
     let sheetOpen = $state(false);
     let inspectRepoId = $state("");
-
-    function typeColor(type: string): string {
-        const colors: Record<string, string> = {
-            chat: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-            embedding: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-            reranker: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-            vision: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-        };
-        return colors[type] ?? "bg-muted text-muted-foreground";
-    }
 
     function handleInspect(repoId: string) {
         inspectRepoId = repoId;
         sheetOpen = true;
-    }
-
-    async function doSearch() {
-        if (!query.trim()) return;
-        loading = true;
-        error = null;
-        try {
-            const res = await fetch(
-                `${config.apiBase}/api/v1/search?q=${encodeURIComponent(query.trim())}&limit=20`,
-            );
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            results = data.results ?? [];
-        } catch (e) {
-            error = e instanceof Error ? e.message : "Search failed";
-            results = null;
-        } finally {
-            loading = false;
-        }
     }
 </script>
 
@@ -85,13 +50,17 @@
                         class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50"
                     />
                     <Input
-                        bind:value={query}
+                        value={ui.query}
+                        oninput={(e) =>
+                            (ui.query = (
+                                e.currentTarget as HTMLInputElement
+                            ).value)}
                         placeholder="e.g. gemma, llama, nomic-embed…"
                         class="pl-9"
                     />
                 </div>
-                <Button type="submit" disabled={loading || !query.trim()}>
-                    {#if loading}
+                <Button type="submit" disabled={ui.loading || !ui.query.trim()}>
+                    {#if ui.loading}
                         <Spinner class="size-4" />
                     {:else}
                         <SearchIcon class="size-4" />
@@ -102,27 +71,27 @@
         </Card.Content>
     </Card.Root>
 
-    {#if error}
+    {#if ui.error}
         <Card.Root class="border-destructive/50 bg-destructive/10">
-            <Card.Content class="text-sm">{error}</Card.Content>
+            <Card.Content class="text-sm">{ui.error}</Card.Content>
         </Card.Root>
     {/if}
 
-    {#if loading}
+    {#if ui.loading}
         <div class="flex flex-col gap-3">
             {#each Array(3) as _}
                 <Skeleton class="h-32 w-full" />
             {/each}
         </div>
-    {:else if results}
-        {#if results.length === 0}
+    {:else if ui.results}
+        {#if ui.results.length === 0}
             <Card.Root>
                 <Card.Content
                     class="flex flex-col items-center gap-2 py-10 text-center"
                 >
                     <SearchIcon class="size-10 text-muted-foreground/50" />
                     <p class="text-sm text-muted-foreground">
-                        No results found for "{query}".
+                        No results found for "{ui.query}".
                     </p>
                     <p class="text-xs text-muted-foreground">
                         Try a different search term or browse popular models on
@@ -135,7 +104,9 @@
             <Card.Root class="flex flex-col overflow-hidden">
                 <div class="flex items-center justify-between px-6 pt-4 pb-2">
                     <p class="text-sm text-muted-foreground">
-                        {results.length} result{results.length !== 1 ? "s" : ""}
+                        {ui.results.length} result{ui.results.length !== 1
+                            ? "s"
+                            : ""}
                         &mdash; click <strong>Inspect</strong> to view available
                         files
                     </p>
@@ -158,7 +129,7 @@
                                 </Table.Row>
                             </Table.Header>
                             <Table.Body>
-                                {#each results as r (r.repo_id)}
+                                {#each ui.results as r (r.repo_id)}
                                     {@const displayName =
                                         r.repo_id.split("/").pop() ?? r.repo_id}
                                     <Table.Row

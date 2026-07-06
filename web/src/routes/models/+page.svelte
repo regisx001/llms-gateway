@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { config } from "$lib/config";
     import * as Card from "$lib/components/ui/card";
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
@@ -19,25 +18,21 @@
     import ClockIcon from "@lucide/svelte/icons/clock";
     import FilterIcon from "@lucide/svelte/icons/filter";
     import { goto } from "$app/navigation";
-
-    // ── State ────────────────────────────────────────────
-    let models = $state<any[]>([]);
-    let loading = $state(true);
-    let error = $state<string | null>(null);
-    let polling = $state(false);
-    let pollInterval = $state<ReturnType<typeof setInterval> | null>(null);
-    let searchQuery = $state("");
-    let selectedType = $state("All Types");
-    let downloadProgress = $state<
-        Map<
-            string,
-            { progressPct: number; downloadedBytes: number; totalBytes: number }
-        >
-    >(new Map());
+    import {
+        ui,
+        sizeStr,
+        typeColor,
+        formatInstalled,
+        loadModels,
+        postAction,
+        stopPolling,
+    } from "./models.svelte";
 
     // ── Derived stats ────────────────────────────────────
     let installedModels = $derived(
-        models.filter((m) => m.status === "installed" || m.status === "active"),
+        ui.models.filter(
+            (m) => m.status === "installed" || m.status === "active",
+        ),
     );
 
     let installedCount = $derived(installedModels.length);
@@ -74,137 +69,19 @@
 
     let typeOptions = $derived<string[]>([
         "All Types",
-        ...new Set(models.map((m: any) => m.type)),
+        ...new Set(ui.models.map((m: any) => m.type)),
     ]);
 
     let filteredModels = $derived(
-        models.filter((m) => {
+        ui.models.filter((m) => {
             const matchesSearch =
-                !searchQuery ||
-                m.name.toLowerCase().includes(searchQuery.toLowerCase());
+                !ui.searchQuery ||
+                m.name.toLowerCase().includes(ui.searchQuery.toLowerCase());
             const matchesType =
-                selectedType === "All Types" || m.type === selectedType;
+                ui.selectedType === "All Types" || m.type === ui.selectedType;
             return matchesSearch && matchesType;
         }),
     );
-
-    // ── Utilities ────────────────────────────────────────
-    function sizeStr(bytes: number): string {
-        const units = ["B", "KB", "MB", "GB", "TB"];
-        let n = bytes;
-        for (const u of units) {
-            if (n < 1024) return `${n.toFixed(1)} ${u}`;
-            n /= 1024;
-        }
-        return `${n.toFixed(1)} PB`;
-    }
-
-    function typeColor(type: string): string {
-        const colors: Record<string, string> = {
-            chat: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-            embedding: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-            reranker: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-            vision: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-            experimental: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-        };
-        return colors[type] ?? "bg-muted text-muted-foreground";
-    }
-
-    function formatInstalled(iso: string): string {
-        const d = new Date(iso);
-        return d.toLocaleDateString("en-US", {
-            month: "2-digit",
-            day: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    }
-
-    // ── Data fetching ────────────────────────────────────
-    async function loadModels() {
-        error = null;
-        try {
-            const modelRes = await fetch(`${config.apiBase}/api/v1/models`);
-            if (!modelRes.ok) throw new Error("Failed to load models");
-            const modelData = await modelRes.json();
-
-            // Store raw bytes for accurate total size calculation
-            models = modelData.models.map((m: any) => ({
-                ...m,
-                _rawBytes:
-                    m.artifacts?.reduce(
-                        (a: number, art: any) => a + (art.size ?? 0),
-                        0,
-                    ) ?? 0,
-                size: sizeStr(
-                    m.artifacts?.reduce(
-                        (a: number, art: any) => a + (art.size ?? 0),
-                        0,
-                    ) ?? 0,
-                ),
-            }));
-
-            // Fetch progress for downloading models
-            const downloadingModels = models.filter(
-                (m: any) => m.status === "downloading",
-            );
-            if (downloadingModels.length > 0) {
-                const progressResults = await Promise.allSettled(
-                    downloadingModels.map(async (m: any) => {
-                        const res = await fetch(
-                            `${config.apiBase}/api/v1/models/${m.id}/progress`,
-                        );
-                        if (!res.ok) return null;
-                        return { id: m.id, ...(await res.json()) };
-                    }),
-                );
-                const newProgress = new Map(downloadProgress);
-                for (const r of progressResults) {
-                    if (r.status === "fulfilled" && r.value) {
-                        newProgress.set(r.value.id, {
-                            progressPct: r.value.progress_pct,
-                            downloadedBytes: r.value.downloaded_bytes,
-                            totalBytes: r.value.total_bytes,
-                        });
-                    }
-                }
-                downloadProgress = newProgress;
-            }
-
-            // Start polling if any models are downloading
-            const hasDownloading = models.some(
-                (m: any) => m.status === "downloading",
-            );
-            if (hasDownloading && !polling) {
-                startPolling();
-            } else if (!hasDownloading && polling) {
-                stopPolling();
-            }
-        } catch (e) {
-            error = e instanceof Error ? e.message : "Failed to load models";
-        } finally {
-            loading = false;
-        }
-    }
-
-    function startPolling() {
-        polling = true;
-        pollInterval = setInterval(loadModels, 2000);
-    }
-
-    function stopPolling() {
-        polling = false;
-        if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
-        }
-    }
-
-    async function postAction(path: string) {
-        await fetch(`${config.apiBase}${path}`, { method: "POST" });
-        await loadModels();
-    }
 
     onMount(() => {
         loadModels();
@@ -229,7 +106,7 @@
             </p>
         </div>
         <div class="flex items-center gap-2">
-            {#if polling}
+            {#if ui.polling}
                 <Badge variant="outline" class="gap-1">
                     <Spinner class="size-3" />
                     Updating...
@@ -241,7 +118,7 @@
         </div>
     </div>
 
-    {#if loading}
+    {#if ui.loading}
         <div class="flex flex-col gap-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {#each Array(4) as _}
@@ -250,9 +127,9 @@
             </div>
             <Skeleton class="h-64 w-full" />
         </div>
-    {:else if error}
+    {:else if ui.error}
         <Card.Root class="border-destructive/50 bg-destructive/10">
-            <Card.Content class="text-sm">{error}</Card.Content>
+            <Card.Content class="text-sm">{ui.error}</Card.Content>
         </Card.Root>
     {:else}
         <!-- ── Stat Cards ──────────────────────────────── -->
@@ -344,7 +221,11 @@
                     type="search"
                     placeholder="Search installed models..."
                     class="pl-9"
-                    bind:value={searchQuery}
+                    value={ui.searchQuery}
+                    oninput={(e) =>
+                        (ui.searchQuery = (
+                            e.currentTarget as HTMLInputElement
+                        ).value)}
                 />
             </div>
             <div class="relative">
@@ -352,7 +233,11 @@
                     class="text-muted-foreground/50 absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2"
                 />
                 <select
-                    bind:value={selectedType}
+                    value={ui.selectedType}
+                    onchange={(e) =>
+                        (ui.selectedType = (
+                            e.currentTarget as HTMLSelectElement
+                        ).value)}
                     class="border-input bg-background text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-9 min-w-35 appearance-none rounded-md border pl-9 pr-8 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-3"
                 >
                     {#each typeOptions as opt}
@@ -382,21 +267,21 @@
                 >
                     <CuboidIcon class="size-10 text-muted-foreground/50" />
                     <p class="text-sm text-muted-foreground">
-                        {#if searchQuery || selectedType !== "All Types"}
+                        {#if ui.searchQuery || ui.selectedType !== "All Types"}
                             No models match your search.
                         {:else}
                             No models installed yet.
                         {/if}
                     </p>
                     <p class="text-xs text-muted-foreground">
-                        {#if searchQuery || selectedType !== "All Types"}
+                        {#if ui.searchQuery || ui.selectedType !== "All Types"}
                             Try adjusting your search or filter.
                         {:else}
                             Go to the Search page to find and install models
                             from HuggingFace.
                         {/if}
                     </p>
-                    {#if !searchQuery && selectedType === "All Types"}
+                    {#if !ui.searchQuery && ui.selectedType === "All Types"}
                         <Button
                             variant="outline"
                             size="sm"
@@ -478,9 +363,8 @@
                                                 </span>
                                             </span>
                                         {:else if m.status === "downloading"}
-                                            {@const prog = downloadProgress.get(
-                                                m.id,
-                                            )}
+                                            {@const prog =
+                                                ui.downloadProgress.get(m.id)}
                                             <div class="flex flex-col gap-1">
                                                 <span
                                                     class="inline-flex items-center gap-1 text-sm text-muted-foreground"
@@ -544,13 +428,13 @@
             </Card.Root>
 
             <!-- ── Installation Log ─────────────────────── -->
-            {#if models.some((m: any) => m.installed_at)}
+            {#if ui.models.some((m: any) => m.installed_at)}
                 <div
                     class="flex items-center gap-2 text-xs text-muted-foreground"
                 >
                     <ClockIcon class="size-3 shrink-0" />
                     <span>
-                        {#each models.filter((m: any) => m.installed_at) as m, i}
+                        {#each ui.models.filter((m: any) => m.installed_at) as m, i}
                             {m.name} installed {new Date(
                                 m.installed_at,
                             ).toLocaleDateString("en-US", {
@@ -560,7 +444,7 @@
                                 hour: "2-digit",
                                 minute: "2-digit",
                             })}
-                            {#if i < models.filter((mm: any) => mm.installed_at).length - 1}
+                            {#if i < ui.models.filter((mm: any) => mm.installed_at).length - 1}
                                 <span class="mx-1 text-muted-foreground/40"
                                     >&middot;</span
                                 >
