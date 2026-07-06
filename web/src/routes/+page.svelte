@@ -14,12 +14,11 @@
 	import { Spinner } from "$lib/components/ui/spinner";
 
 	import CuboidIcon from "@lucide/svelte/icons/cuboid";
-	import ActivityIcon from "@lucide/svelte/icons/activity";
+
 	import DatabaseIcon from "@lucide/svelte/icons/database";
 	import CpuIcon from "@lucide/svelte/icons/cpu";
 	import SearchIcon from "@lucide/svelte/icons/search";
-	import PlayIcon from "@lucide/svelte/icons/play";
-	import SquareIcon from "@lucide/svelte/icons/square";
+
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
@@ -46,9 +45,6 @@
 		}[]
 	>([]);
 	let searchQuery = $state("");
-
-	// Derived: active model name for display
-	let activeModelName = $derived(systemInfo?.active_models?.[0] ?? null);
 
 	// ── Helpers ──────────────────────────────────────────────────────
 
@@ -183,7 +179,7 @@
 	{/if}
 
 	<!-- ── Stats Cards ──────────────────────────────────────────── -->
-	<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+	<div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
 		{#if loading}
 			{#each Array(4) as _}
 				<Card.Root>
@@ -202,18 +198,6 @@
 					</Card.Description>
 					<Card.Title class="text-3xl font-bold tabular-nums">
 						{systemInfo?.models_count ?? "?"}
-					</Card.Title>
-				</Card.Header>
-			</Card.Root>
-
-			<Card.Root>
-				<Card.Header>
-					<Card.Description class="flex items-center gap-2 text-sm">
-						<ActivityIcon class="size-4" />
-						Active
-					</Card.Description>
-					<Card.Title class="truncate text-xl font-bold">
-						{activeModelName || "—"}
 					</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -378,32 +362,6 @@
 								</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex justify-end gap-1">
-										{#if m.status === "installed"}
-											<Button
-												variant="outline"
-												size="sm"
-												onclick={() =>
-													postAction(
-														`/api/v1/models/${m.id}/activate`,
-													)}
-											>
-												<PlayIcon class="size-3.5" />
-												Activate
-											</Button>
-										{/if}
-										{#if activeModelName === m.id}
-											<Button
-												variant="outline"
-												size="sm"
-												onclick={() =>
-													postAction(
-														`/api/v1/models/${m.id}/deactivate`,
-													)}
-											>
-												<SquareIcon class="size-3.5" />
-												Deactivate
-											</Button>
-										{/if}
 										<Button
 											variant="outline"
 											size="sm"
@@ -414,9 +372,6 @@
 														`Remove model "${m.name}"?`,
 													)
 												) {
-													postAction(
-														`/api/v1/models/${m.id}/deactivate`,
-													);
 													fetch(
 														`${config.apiBase}/api/v1/models/${m.id}`,
 														{

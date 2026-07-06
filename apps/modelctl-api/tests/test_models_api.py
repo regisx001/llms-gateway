@@ -153,28 +153,3 @@ class TestRemoveModel:
     def test_remove_nonexistent(self, client: TestClient):
         resp = client.delete("/api/v1/models/nonexistent")
         assert resp.status_code == 404
-
-
-class TestActivateDeactivate:
-    def test_activate_success(self, seeded_client: TestClient):
-        resp = seeded_client.post("/api/v1/models/test-model-001/activate")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["id"] == "test-model-001"
-
-    def test_activate_nonexistent(self, client: TestClient):
-        resp = client.post("/api/v1/models/nonexistent/activate")
-        assert resp.status_code == 404
-
-    def test_deactivate_success(self, seeded_client: TestClient):
-        resp = seeded_client.post("/api/v1/models/test-model-001/deactivate")
-        assert resp.status_code == 200
-
-    def test_deactivate_nonexistent(self, client: TestClient):
-        resp = client.post("/api/v1/models/nonexistent/deactivate")
-        assert resp.status_code == 404
-
-    def test_activate_twice(self, seeded_client: TestClient):
-        seeded_client.post("/api/v1/models/test-model-001/activate")
-        resp = seeded_client.post("/api/v1/models/test-model-001/activate")
-        assert resp.status_code == 200  # idempotent

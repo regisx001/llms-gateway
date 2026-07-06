@@ -1,4 +1,4 @@
-"""System endpoints — version, storage info, server reload."""
+"""System endpoints — version, storage info."""
 
 from __future__ import annotations
 
@@ -17,11 +17,3 @@ async def system_info(
 ):
     """System information: version, storage usage, model counts."""
     return svc.info()
-
-
-@router.post("/system/reload")
-async def system_reload(
-    svc: SystemService = Depends(get_system_service),
-):
-    """Trigger llama-server to reload with the current active model."""
-    return svc.reload()
