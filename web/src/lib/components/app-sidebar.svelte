@@ -146,7 +146,6 @@
                                             {...props}
                                             onclick={handleNavClick}
                                             class="relative flex w-full items-center gap-3 px-3 py-2"
-                                            class:pl-5={item.title === "Search"}
                                         >
                                             {#if active}
                                                 <span
@@ -177,33 +176,6 @@
                                         </a>
                                     {/snippet}
                                 </Sidebar.MenuButton>
-
-                                {#if item.title === "Search"}
-                                    <div class="px-3 pb-2 pt-1">
-                                        <div class="relative">
-                                            <SearchIcon
-                                                class="text-sidebar-foreground/40 absolute left-2 top-1/2 size-3.5 -translate-y-1/2"
-                                            />
-                                            <input
-                                                type="search"
-                                                placeholder="Search models..."
-                                                class="bg-sidebar-accent/50 border-sidebar-border/50 text-sidebar-foreground placeholder:text-sidebar-foreground/40 h-8 w-full rounded-md border py-1.5 pl-7 pr-2 text-xs outline-none transition-colors focus:border-sidebar-ring focus:ring-1 focus:ring-sidebar-ring"
-                                                onfocus={() => {
-                                                    if (!isActive("/search")) {
-                                                        window.location.href =
-                                                            "/search";
-                                                    }
-                                                }}
-                                            />
-                                            <kbd
-                                                class="text-sidebar-foreground/30 absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded border border-sidebar-border/50 bg-sidebar-accent/30 px-1 py-0.5 text-[10px] font-medium leading-none md:inline-flex"
-                                            >
-                                                <CommandIcon class="size-2.5" />
-                                                K
-                                            </kbd>
-                                        </div>
-                                    </div>
-                                {/if}
                             </Sidebar.MenuItem>
                         {/each}
                     </Sidebar.Menu>

@@ -235,7 +235,7 @@
         </div>
 
         <Card.Root>
-            <Card.Content class="p-0">
+            <Card.Content>
                 <Table.Root>
                     <Table.Header>
                         <Table.Row>

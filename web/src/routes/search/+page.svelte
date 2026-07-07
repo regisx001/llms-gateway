@@ -132,20 +132,14 @@
                     </p>
                 </div>
                 <div class="max-h-[calc(100dvh-20rem)] overflow-y-auto">
-                    <Card.Content class="p-0">
+                    <Card.Content>
                         <Table.Root>
                             <Table.Header>
                                 <Table.Row>
-                                    <Table.Head class="w-[45%]">Name</Table.Head
-                                    >
-                                    <Table.Head class="w-[15%]">Type</Table.Head
-                                    >
-                                    <Table.Head class="w-[15%]"
-                                        >Downloads</Table.Head
-                                    >
-                                    <Table.Head class="w-[10%]"
-                                        >Likes</Table.Head
-                                    >
+                                    <Table.Head>Name</Table.Head>
+                                    <Table.Head>Type</Table.Head>
+                                    <Table.Head>Downloads</Table.Head>
+                                    <Table.Head>Likes</Table.Head>
                                 </Table.Row>
                             </Table.Header>
                             <Table.Body>
@@ -181,7 +175,7 @@
                                         </Table.Cell>
                                         <Table.Cell>
                                             <span
-                                                class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium capitalize leading-none {typeColor(
+                                                class="inline-block rounded-md px-2.5 py-1 text-xs font-medium capitalize {typeColor(
                                                     r.type,
                                                 )}"
                                             >

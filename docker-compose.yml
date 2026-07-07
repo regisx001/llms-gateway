@@ -32,6 +32,8 @@ services:
     environment:
       - MODELCTL_API_REGISTRY_DIR=${HOME}/LLMGateway-Models/registry
       - MODELCTL_API_STORAGE_DIR=${HOME}/LLMGateway-Models/storage
+      - MODELCTL_REGISTRY_DIR=${HOME}/LLMGateway-Models/registry
+      - MODELCTL_STORAGE_DIR=${HOME}/LLMGateway-Models/storage
       - MODELCTL_API_PORT=${MODELCTL_API_PORT:-8000}
       - HF_TOKEN=${HF_TOKEN:-}
     networks:
