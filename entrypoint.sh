@@ -26,6 +26,3 @@ uvicorn modelctl_api.main:app \
     --host 0.0.0.0 \
     --port "$API_PORT" \
     --log-level info
-    sleep 1
-    start_llama_server "$@"
-done
