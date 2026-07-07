@@ -1,36 +1,36 @@
 # Dockerfile.llamacpp.server
-# Builds the management API container (modelctl-api).
-# This container does NOT run llama-server — it only serves the
-# FastAPI management API and orchestrates per-capability inference
-# containers at runtime via the Docker SDK.
-#
-# The old llama.cpp base has been archived at
-# Dockerfile.llamacpp.server.old for reference.
+# Builds a custom image with llama-server + modelctl CLI + modelctl-api
 
-FROM python:3.12-slim
+ARG LLAMACPP_IMAGE
+FROM ${LLAMACPP_IMAGE}
 
-# ── System dependencies ────────────────────────────────────────────
+# Install Python for modelctl + FastAPI
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-requests \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Bun (for building the SvelteKit frontend) ─────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# ── Bun (for building the SvelteKit frontend) ─────────────────────────
-RUN curl -fsSL https://bun.sh/install | bash
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
 # Copy and install modelctl-core (lib)
 COPY libs/modelctl-core/ /opt/modelctl-core/
-RUN pip install /opt/modelctl-core --no-cache-dir
+RUN pip3 install /opt/modelctl-core --break-system-packages --no-cache-dir
 
 # Copy and install modelctl (CLI app)
 COPY apps/modelctl/ /opt/modelctl/
-RUN pip install /opt/modelctl --no-cache-dir
+RUN pip3 install /opt/modelctl --break-system-packages --no-cache-dir
 
 # Copy and install modelctl-orch (orchestration lib — needed by modelctl-api)
 COPY libs/modelctl-orch/ /opt/modelctl-orch/
-RUN pip install /opt/modelctl-orch --no-cache-dir
+RUN pip3 install /opt/modelctl-orch --break-system-packages --no-cache-dir
 
 # ── Copy modelctl-api skeleton so web build has a target directory ───
 #     Placed at /opt/apps/modelctl-api to match the repo-relative path
@@ -49,14 +49,17 @@ RUN cd /opt/web \
 RUN mv /opt/apps/modelctl-api /opt/modelctl-api
 
 # Install modelctl-api (now includes static frontend assets)
-RUN pip install /opt/modelctl-api --no-cache-dir && \
-    pip install uvicorn --no-cache-dir
+RUN pip3 install /opt/modelctl-api --break-system-packages --no-cache-dir && \
+    pip3 install uvicorn --break-system-packages --no-cache-dir
 
-# Entrypoint — starts modelctl-api (FastAPI)
+# Entrypoint — starts llama-server + modelctl-api
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8000
+# Volume for model files (mounted at runtime)
+RUN mkdir -p /models
+
+EXPOSE 8080 8000
 
 ENTRYPOINT ["/entrypoint.sh"]
 

@@ -11,18 +11,15 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - llama-server
+      - llms-gateway
     networks:
       - modelctl-net
 
-  llama-server:
+  llms-gateway:
     build:
       context: .
       dockerfile: Dockerfile.llamacpp.server
-      args:
-        LLAMACPP_IMAGE: ${LLAMACPP_IMAGE}
-    container_name: llama-server
-    # restart: unless-stopped
+    container_name: llms-gateway
     ports:
       - "${MODELCTL_API_PORT:-8000}:8000"
     volumes:
@@ -38,8 +35,6 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
     networks:
       - modelctl-net
-    command: >
-      --host 0.0.0.0 --port 8080
 
 networks:
   modelctl-net:
