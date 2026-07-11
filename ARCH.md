@@ -9,6 +9,7 @@ graph TB
     Client[Client / App] -->|port 6060| Nginx[Nginx Reverse Proxy<br/>modelctl-nginx]
     
     Nginx -->|/v1/chat/completions| Chat[modelctl-chat:8080<br/>llama-server]
+    Nginx -->|/v1/tool-calling/completions| ToolCalling[modelctl-tool-calling:8080<br/>llama-server]
     Nginx -->|/v1/embeddings| Embed[modelctl-embedding:8080<br/>llama-server]
     Nginx -->|/v1/rerank| Rerank[modelctl-reranker:8080<br/>llama-server]
     Nginx -->|/v1/vision| Vision[modelctl-vision:8080<br/>llama-server]

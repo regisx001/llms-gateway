@@ -34,6 +34,9 @@ def _infer_type(repo_info: dict) -> str:
         return "vision"
     if "rerank" in repo_info.get("id", "").lower():
         return "reranker"
+    repo_id = repo_info.get("id", "").lower()
+    if "function" in repo_id or "tool" in repo_id:
+        return "tool-calling"
     return "experimental"
 
 
@@ -54,8 +57,14 @@ def _filter_gguf_files(siblings: list[dict]) -> list[dict]:
 
 
 def search(query: str, limit: int = 15) -> list[dict]:
-    """Search HuggingFace for repositories matching query."""
-    url = f"{HF_API}?search={quote(query)}&sort=downloads&direction=-1&limit={limit}"
+    """Search HuggingFace for GGUF model repositories matching query.
+
+    Filters results to only include repositories that appear to contain
+    GGUF quantized models by appending ``gguf`` to the search query.
+    """
+    # Append "gguf" to narrow results to GGUF-quantized model repos
+    search_term = f"{query.strip()} gguf" if query.strip() else "gguf"
+    url = f"{HF_API}?search={quote(search_term)}&sort=downloads&direction=-1&limit={limit}"
     resp = requests.get(url, headers=_headers(), timeout=15)
     resp.raise_for_status()
     results = []

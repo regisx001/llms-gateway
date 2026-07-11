@@ -17,7 +17,8 @@ class ContainerState(str, Enum):
     FAILED = "failed"
 
 
-Capability = Literal["chat", "embedding", "reranker", "vision", "experimental"]
+Capability = Literal["chat", "embedding", "reranker",
+                     "vision", "experimental", "tool-calling"]
 
 
 @dataclass
@@ -37,6 +38,7 @@ CAPABILITY_PORTS: dict[str, int] = {
     "reranker": 30003,
     "vision": 30004,
     "experimental": 30005,
+    "tool-calling": 30006,
 }
 
 # Env variable names for port overrides
@@ -46,6 +48,7 @@ CAPABILITY_PORT_ENV_VARS: dict[str, str] = {
     "reranker": "MODELCTL_RERANKER_PORT",
     "vision": "MODELCTL_VISION_PORT",
     "experimental": "MODELCTL_EXPERIMENTAL_PORT",
+    "tool-calling": "MODELCTL_TOOL_CALLING_PORT",
 }
 
 # Default resource profiles — matches IMPL_SPEC §3.3
@@ -55,6 +58,7 @@ DEFAULT_PROFILES: dict[str, ResourceProfile] = {
     "reranker": ResourceProfile(memory_limit="4g", cpu_count=2.0, gpu_device="0", gpu_count=1),
     "vision": ResourceProfile(memory_limit="8g", cpu_count=4.0, gpu_device="0", gpu_count=1),
     "experimental": ResourceProfile(memory_limit="4g", cpu_count=2.0, gpu_device="0", gpu_count=1),
+    "tool-calling": ResourceProfile(memory_limit="4g", cpu_count=2.0, gpu_device="0", gpu_count=1),
 }
 
 

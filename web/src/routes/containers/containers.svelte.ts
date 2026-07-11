@@ -37,6 +37,7 @@ export const capabilities = [
     "reranker",
     "vision",
     "experimental",
+    "tool-calling",
 ];
 
 // ── State ──────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ export function capabilityColor(cap: string): string {
         reranker: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
         vision: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
         experimental: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+        "tool-calling": "bg-orange-500/15 text-orange-600 dark:text-orange-400",
     };
     return colors[cap] ?? "bg-muted text-muted-foreground";
 }

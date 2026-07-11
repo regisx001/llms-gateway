@@ -106,7 +106,7 @@ class TestModel:
 
     def test_all_model_types(self):
         """All MODEL_TYPES values should be accepted."""
-        for t in ("chat", "embedding", "reranker", "vision", "experimental"):
+        for t in ("chat", "embedding", "reranker", "vision", "experimental", "tool-calling"):
             m = Model(id="x", type=t)
             assert m.type == t
 
@@ -156,8 +156,10 @@ class TestModel:
         """Model with multiple artifacts should serialize all of them."""
         m = Model(id="m", artifacts=[
             Artifact(name="model.gguf"),
-            Artifact(name="tokenizer.json", role="tokenizer", file_type="config"),
-            Artifact(name="README.md", role="documentation", file_type="documentation"),
+            Artifact(name="tokenizer.json",
+                     role="tokenizer", file_type="config"),
+            Artifact(name="README.md", role="documentation",
+                     file_type="documentation"),
         ])
         d = m.to_dict()
         assert len(d["artifacts"]) == 3
@@ -170,6 +172,7 @@ class TestModel:
 
     def test_model_artifacts_already_instantiated(self):
         """When artifacts are already Artifact instances, they stay as-is."""
-        m = Model(id="x", artifacts=[Artifact(name="a.gguf"), Artifact(name="b.gguf")])
+        m = Model(id="x", artifacts=[Artifact(
+            name="a.gguf"), Artifact(name="b.gguf")])
         assert len(m.artifacts) == 2
         assert all(isinstance(a, Artifact) for a in m.artifacts)

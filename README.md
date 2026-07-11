@@ -6,17 +6,18 @@ LLM inference gateway with model management — search, download, and serve GGUF
 
 ```
 [Client] → :6060 → Nginx (reverse proxy)
-                      ├─ /v1/chat/completions  → modelctl-chat:8080   (internal)
-                      ├─ /v1/embeddings        → modelctl-embedding:8080
-                      ├─ /v1/rerank            → modelctl-reranker:8080
-                      ├─ /v1/vision            → modelctl-vision:8080
-                      ├─ /v1/experimental      → modelctl-experimental:8080
-                      └─ / (UI + Management)   → modelctl-api:8000
+                      ├─ /v1/chat/completions          → modelctl-chat:8080           (internal)
+                      ├─ /v1/tool-calling/completions  → modelctl-tool-calling:8080   (internal)
+                      ├─ /v1/embeddings                → modelctl-embedding:8080
+                      ├─ /v1/rerank                    → modelctl-reranker:8080
+                      ├─ /v1/vision                    → modelctl-vision:8080
+                      ├─ /v1/experimental              → modelctl-experimental:8080
+                      └─ / (UI + Management)           → modelctl-api:8000
 ```
 
 Nginx is the **single entry point**. Inference ports are never exposed to the host — all traffic routes through Nginx on the internal `modelctl-net` Docker network.
 
-Each model capability (chat, embedding, reranker, vision, experimental) runs in its **own dedicated `llama-server` container**, managed dynamically via the Docker SDK.
+Each model capability (chat, tool-calling, embedding, reranker, vision, experimental) runs in its **own dedicated `llama-server` container**, managed dynamically via the Docker SDK.
 
 ## Anatomy
 
@@ -132,6 +133,30 @@ curl http://localhost:6060/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"local-model","messages":[{"role":"user","content":"Hello"}],"stream":false}'
 
+# Tool calling / function calling (via Nginx → active inference container)
+# llama-server handles the "tools" parameter natively on the standard
+# /v1/chat/completions endpoint — start a tool-calling model container
+# and it serves at the same path as a regular chat model.
+curl http://localhost:6060/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"local-model",
+    "messages":[{"role":"user","content":"What'\''s the weather in Paris?"}],
+    "tools":[{
+      "type":"function",
+      "function":{
+        "name":"get_weather",
+        "description":"Get current weather for a city",
+        "parameters":{
+          "type":"object",
+          "properties":{"city":{"type":"string"}},
+          "required":["city"]
+        }
+      }
+    }],
+    "stream":false
+  }'
+
 # Embedding (via Nginx → modelctl-embedding container)
 curl http://localhost:6060/v1/embeddings \
   -H "Content-Type: application/json" \
@@ -150,6 +175,7 @@ You can also access the API directly (bypassing Nginx) on port 8000.
 | URL | Backend | Purpose |
 |---|---|---|
 | `/v1/chat/completions` | `modelctl-chat:8080` | Chat inference |
+| `/v1/tool-calling/completions` | `modelctl-tool-calling:8080` | Tool-calling / function calling |
 | `/v1/embeddings` | `modelctl-embedding:8080` | Embedding inference |
 | `/v1/rerank` | `modelctl-reranker:8080` | Reranker |
 | `/v1/vision` | `modelctl-vision:8080` | Vision |

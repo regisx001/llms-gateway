@@ -66,6 +66,7 @@ class TestCapabilityPorts:
         assert CAPABILITY_PORTS["reranker"] == 30003
         assert CAPABILITY_PORTS["vision"] == 30004
         assert CAPABILITY_PORTS["experimental"] == 30005
+        assert CAPABILITY_PORTS["tool-calling"] == 30006
 
     def test_env_var_names(self):
         assert CAPABILITY_PORT_ENV_VARS["chat"] == "MODELCTL_CHAT_PORT"
@@ -73,9 +74,10 @@ class TestCapabilityPorts:
         assert CAPABILITY_PORT_ENV_VARS["reranker"] == "MODELCTL_RERANKER_PORT"
         assert CAPABILITY_PORT_ENV_VARS["vision"] == "MODELCTL_VISION_PORT"
         assert CAPABILITY_PORT_ENV_VARS["experimental"] == "MODELCTL_EXPERIMENTAL_PORT"
+        assert CAPABILITY_PORT_ENV_VARS["tool-calling"] == "MODELCTL_TOOL_CALLING_PORT"
 
     def test_all_capabilities_have_ports(self):
-        for cap in ("chat", "embedding", "reranker", "vision", "experimental"):
+        for cap in ("chat", "embedding", "reranker", "vision", "experimental", "tool-calling"):
             assert cap in CAPABILITY_PORTS
             assert cap in CAPABILITY_PORT_ENV_VARS
 
@@ -102,7 +104,7 @@ class TestDefaultProfiles:
         assert p.memory_limit == "8g"
 
     def test_all_capabilities_have_profile(self):
-        for cap in ("chat", "embedding", "reranker", "vision", "experimental"):
+        for cap in ("chat", "embedding", "reranker", "vision", "experimental", "tool-calling"):
             assert cap in DEFAULT_PROFILES
 
 

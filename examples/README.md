@@ -59,7 +59,38 @@ uv run python examples/embedding/raw_http.py
 uv run python examples/run_llama_with_orchestrator.py --dry-run
 ```
 
+## Tool Calling examples
+
+| File | Description |
+|---|---|
+| `tool-calling/basic.py` | Single request with function/tool definitions, non-streaming |
+
+```bash
+uv run python examples/tool-calling/basic.py
+```
+
 ## Quick curl reference
+
+### Tool Calling
+
+```bash
+# Tool / function calling (via modelctl-tool-calling container)
+curl -s http://localhost:6060/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"local-model",
+    "messages":[{"role":"user","content":"What is the weather in Paris?"}],
+    "tools":[{
+      "type":"function",
+      "function":{
+        "name":"get_weather",
+        "description":"Get current weather for a city",
+        "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}
+      }
+    }],
+    "stream":false
+  }'
+```
 
 ### Chat
 

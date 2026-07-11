@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "modelctl-core",
     "modelctl",
+    "openai>=2.45.0",
 ]
 
 [tool.uv.sources]
