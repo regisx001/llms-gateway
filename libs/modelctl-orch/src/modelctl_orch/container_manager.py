@@ -83,6 +83,7 @@ class ContainerManager:
         model_path: str,
         storage_root: str = "",
         profile: ResourceProfile | None = None,
+        server_args: list[str] | None = None,
     ) -> ContainerInfo:
         """Start a new inference container for *capability*.
 
@@ -107,6 +108,9 @@ class ContainerManager:
             the model can be loaded from its real storage location.
         profile:
             Resource constraints. Falls back to ``DEFAULT_PROFILES[capability]``.
+        server_args:
+            Extra CLI arguments forwarded directly to ``llama-server``
+            (e.g. ``["--jinja"]``).
 
         Returns
         -------
@@ -165,6 +169,8 @@ class ContainerManager:
         extra_flags: list[str] = []
         if capability == "embedding":
             extra_flags = ["--embeddings", "--pooling", "last"]
+        if server_args:
+            extra_flags.extend(server_args)
 
         # ── run llama-server CLI directly ───────────────────────────
         # No host port binding — the container is reachable on the

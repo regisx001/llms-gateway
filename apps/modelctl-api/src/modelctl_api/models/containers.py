@@ -34,6 +34,7 @@ class StartContainerRequest(BaseModel):
     capability: str = "chat"
     model_id: str = ""
     resource_profile: ResourceProfileResponse | None = None
+    server_args: list[str] = []
 
 
 class StartContainerResponse(BaseModel):

@@ -48,6 +48,7 @@ async def start_container(
         cpu_count=body.resource_profile.cpu_count if body.resource_profile else None,
         gpu_device=body.resource_profile.gpu_device if body.resource_profile else None,
         gpu_count=body.resource_profile.gpu_count if body.resource_profile else None,
+        server_args=body.server_args,
     )
     return {"container": info}
 

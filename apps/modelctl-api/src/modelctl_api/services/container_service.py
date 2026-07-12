@@ -89,6 +89,7 @@ class ContainerService:
         cpu_count: float | None = None,
         gpu_device: str | None = None,
         gpu_count: int | None = None,
+        server_args: list[str] | None = None,
     ) -> dict:
         """Start a new inference container for the given model.
 
@@ -133,6 +134,7 @@ class ContainerService:
             model_path=model_path,
             storage_root=storage_root,
             profile=profile,
+            server_args=server_args,
         )
         log.info(
             "Started container %s for model %s (%s)",

@@ -452,8 +452,13 @@
                                 {#each capabilities as cap}
                                     <button
                                         type="button"
-                                        onclick={() =>
-                                            (ui.selectedCapability = cap)}
+                                        onclick={() => {
+                                            ui.selectedCapability = cap;
+                                            ui.serverArgs =
+                                                cap === "tool-calling"
+                                                    ? "--jinja"
+                                                    : "";
+                                        }}
                                         class="cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-all {ui.selectedCapability ===
                                         cap
                                             ? capabilityColor(cap) +
@@ -464,6 +469,29 @@
                                     </button>
                                 {/each}
                             </div>
+                        </div>
+
+                        <div class="flex flex-col gap-1.5">
+                            <label
+                                for="server-args"
+                                class="text-sm font-medium"
+                            >
+                                Server args
+                                <span
+                                    class="font-normal text-muted-foreground/60"
+                                    >(extra llama-server flags)</span
+                                >
+                            </label>
+                            <Input
+                                id="server-args"
+                                bind:value={ui.serverArgs}
+                                placeholder="e.g. --jinja --no-kv-offload"
+                                class="h-9"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                These flags are passed directly to
+                                <code class="text-[10px]">llama-server</code>.
+                            </p>
                         </div>
 
                         <Separator />

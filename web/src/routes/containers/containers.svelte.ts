@@ -64,6 +64,7 @@ export const ui = $state({
     cpuCount: "",
     gpuDevice: "",
     gpuCount: "",
+    serverArgs: "",
 
     // Logs sheet
     logsSheetOpen: false,
@@ -163,6 +164,11 @@ export async function startContainer() {
             model_id: ui.selectedModelId,
             capability: ui.selectedCapability,
         };
+        if (ui.serverArgs.trim()) {
+            body.server_args = ui.serverArgs
+                .split(/\s+/)
+                .filter(Boolean);
+        }
         const profile: Record<string, unknown> = {};
         if (ui.memoryLimit) profile.memory_limit = ui.memoryLimit;
         if (ui.cpuCount) profile.cpu_count = parseFloat(ui.cpuCount);
@@ -252,6 +258,7 @@ export function resetForm() {
     ui.cpuCount = "";
     ui.gpuDevice = "";
     ui.gpuCount = "";
+    ui.serverArgs = "";
     ui.startError = null;
 }
 
