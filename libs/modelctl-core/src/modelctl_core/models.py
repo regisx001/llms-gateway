@@ -7,8 +7,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Optional
 
-MODEL_TYPES = ("chat", "embedding", "reranker",
-               "vision", "experimental", "tool-calling")
+MODEL_TYPES = ("chat", "embedding", "reranker", "vision", "experimental")
 FILE_TYPES = ("gguf", "tokenizer", "config",
               "documentation", "adapter", "other")
 

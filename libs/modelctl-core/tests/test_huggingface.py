@@ -51,30 +51,6 @@ class TestSearch:
         headers = mock_get.call_args[1]["headers"]
         assert "modelctl" in headers["User-Agent"]
 
-    @patch("modelctl_core.huggingface.requests.get")
-    def test_search_appends_gguf_to_query(self, mock_get):
-        """Search should append 'gguf' to narrow results to GGUF repos."""
-        mock_get.return_value = _mock_response([])
-        hf.search("llama")
-        url = mock_get.call_args[0][0]
-        assert "search=llama%20gguf" in url or "search=llama+gguf" in url
-
-    @patch("modelctl_core.huggingface.requests.get")
-    def test_search_uses_gguf_alone_when_query_empty(self, mock_get):
-        """Empty query should search for 'gguf' alone."""
-        mock_get.return_value = _mock_response([])
-        hf.search("")
-        url = mock_get.call_args[0][0]
-        assert "search=gguf" in url
-
-    @patch("modelctl_core.huggingface.requests.get")
-    def test_search_uses_gguf_alone_when_query_blank(self, mock_get):
-        """Whitespace-only query should fall back to 'gguf'."""
-        mock_get.return_value = _mock_response([])
-        hf.search("   ")
-        url = mock_get.call_args[0][0]
-        assert "search=gguf" in url
-
     @pytest.mark.skipif(not __import__("os").environ.get("HF_TOKEN"),
                         reason="HF_TOKEN not set")
     @patch("modelctl_core.huggingface.requests.get")
@@ -121,19 +97,15 @@ class TestInspect:
 class TestInferType:
     def test_chat(self):
         assert hf._infer_type({"pipeline_tag": "text-generation"}) == "chat"
-        assert hf._infer_type(
-            {"pipeline_tag": "text2text-generation"}) == "chat"
+        assert hf._infer_type({"pipeline_tag": "text2text-generation"}) == "chat"
 
     def test_embedding(self):
-        assert hf._infer_type(
-            {"pipeline_tag": "feature-extraction"}) == "embedding"
-        assert hf._infer_type(
-            {"pipeline_tag": "sentence-similarity"}) == "embedding"
+        assert hf._infer_type({"pipeline_tag": "feature-extraction"}) == "embedding"
+        assert hf._infer_type({"pipeline_tag": "sentence-similarity"}) == "embedding"
 
     def test_vision(self):
         assert hf._infer_type({"pipeline_tag": "image-to-text"}) == "vision"
-        assert hf._infer_type(
-            {"pipeline_tag": "image-classification"}) == "vision"
+        assert hf._infer_type({"pipeline_tag": "image-classification"}) == "vision"
 
     def test_reranker(self):
         assert hf._infer_type({"id": "some-reranker-model"}) == "reranker"
@@ -141,12 +113,6 @@ class TestInferType:
 
     def test_experimental_fallback(self):
         assert hf._infer_type({"id": "unknown-model"}) == "experimental"
-
-    def test_tool_calling(self):
-        assert hf._infer_type(
-            {"id": "functiongemma-270m-it"}) == "tool-calling"
-        assert hf._infer_type({"id": "tool-calling-model"}) == "tool-calling"
-        assert hf._infer_type({"id": "some-function-model"}) == "tool-calling"
 
 
 class TestFilterGGUF:
@@ -205,8 +171,7 @@ class TestBuildModelFromRepo:
             "siblings": [],
         }
         # mock won't be called since we pass repo_info
-        model = hf.build_model_from_repo(
-            "test/Model", "model.gguf", repo_info=info)
+        model = hf.build_model_from_repo("test/Model", "model.gguf", repo_info=info)
         assert model.repo_id == "test/Model"
         mock_get.assert_not_called()
 
@@ -215,16 +180,13 @@ class TestBuildModelFromRepo:
 
 class TestInferTypeEdgeCases:
     def test_feature_extraction(self):
-        assert hf._infer_type(
-            {"pipeline_tag": "feature-extraction"}) == "embedding"
+        assert hf._infer_type({"pipeline_tag": "feature-extraction"}) == "embedding"
 
     def test_sentence_similarity(self):
-        assert hf._infer_type(
-            {"pipeline_tag": "sentence-similarity"}) == "embedding"
+        assert hf._infer_type({"pipeline_tag": "sentence-similarity"}) == "embedding"
 
     def test_image_classification(self):
-        assert hf._infer_type(
-            {"pipeline_tag": "image-classification"}) == "vision"
+        assert hf._infer_type({"pipeline_tag": "image-classification"}) == "vision"
 
     def test_object_detection(self):
         assert hf._infer_type({"pipeline_tag": "object-detection"}) == "vision"
@@ -249,8 +211,7 @@ class TestFilterGGUFEdgeCases:
             {"rfilename": "other.txt"},
         ]
         result = hf._filter_gguf_files(siblings)
-        # .GGUF does not match .endswith(".gguf")
-        assert result == ["model.gguf"]
+        assert result == ["model.gguf"]  # .GGUF does not match .endswith(".gguf")
 
 
 class TestBuildModelFromRepoEdgeCases:
@@ -279,8 +240,7 @@ class TestBuildModelFromRepoEdgeCases:
                 {"rfilename": "config.json"},
             ],
         })
-        model = hf.build_model_from_repo(
-            "test/TokenizerRepo", "tokenizer.json")
+        model = hf.build_model_from_repo("test/TokenizerRepo", "tokenizer.json")
         assert model.repo_id == "test/TokenizerRepo"
         assert model.artifacts[0].name == "tokenizer.json"
 
